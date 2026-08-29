@@ -1,13 +1,14 @@
 """Controlled handover and ownership-transfer architecture."""
 
-from .handover import Handover, HandoverRequest, HandoverRequestStatus, HandoverValidationError
-from .state import HandoverStage, HandoverTransitionError
+from .handover import Handover, HandoverRequest, HandoverValidationError, HandoverAuditEntry
+from .state import HandoverRequestStatus, HandoverStage, HandoverTransitionError
 
 __all__ = [
     "Handover",
     "HandoverRequest",
-    "HandoverRequestStatus",
     "HandoverValidationError",
+    "HandoverAuditEntry",
+    "HandoverRequestStatus",
     "HandoverStage",
     "HandoverTransitionError",
 ]

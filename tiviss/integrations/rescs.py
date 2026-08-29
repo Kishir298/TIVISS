@@ -11,11 +11,17 @@ exists.
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..memory.interface import MemoryBackend, MemoryKeyError, MemoryRecord
 from ..memory.local import LocalMemory
-from .base import IntegrationAdapter, IntegrationRequest, IntegrationResponse, IntegrationStatus
+from .base import (
+    IntegrationAdapter,
+    IntegrationRequest,
+    IntegrationResponse,
+    IntegrationStatus,
+)
 
 
 class RESCSAdapter(IntegrationAdapter, ABC):
@@ -45,7 +51,9 @@ class LocalRESCSAdapter(RESCSAdapter):
 
     adapter_id = "rescs.local"
 
-    def __init__(self, *, backend: MemoryBackend | None = None, failure_mode: bool = False) -> None:
+    def __init__(
+        self, *, backend: MemoryBackend | None = None, failure_mode: bool = False
+    ) -> None:
         self._backend = backend or LocalMemory()
         self._failure_mode = failure_mode
         self._connected = False
@@ -75,7 +83,14 @@ class LocalRESCSAdapter(RESCSAdapter):
     def backend(self) -> MemoryBackend:
         return self._backend
 
-    def _response(self, request: IntegrationRequest, *, ok: bool, payload: Mapping[str, Any] | None = None, error: str | None = None) -> IntegrationResponse:
+    def _response(
+        self,
+        request: IntegrationRequest,
+        *,
+        ok: bool,
+        payload: Mapping[str, Any] | None = None,
+        error: str | None = None,
+    ) -> IntegrationResponse:
         self.interactions.append(request)
         if self._failure_mode:
             return IntegrationResponse(
@@ -93,33 +108,47 @@ class LocalRESCSAdapter(RESCSAdapter):
         )
 
     def put(self, record: MemoryRecord) -> IntegrationResponse:
-        request = IntegrationRequest(operation="put", payload={"record_id": record.record_id}, source="tiviss")
+        request = IntegrationRequest(
+            operation="put", payload={"record_id": record.record_id}, source="tiviss"
+        )
         if not self.connected():
             return self._unavailable(request)
         stored = self._backend.store(record)
         return self._response(
-            request, ok=True,
+            request,
+            ok=True,
             payload={"record_id": stored.record_id, "key": stored.key},
         )
 
     def get(self, record_id: str) -> IntegrationResponse:
-        request = IntegrationRequest(operation="get", payload={"record_id": record_id}, source="tiviss")
+        request = IntegrationRequest(
+            operation="get", payload={"record_id": record_id}, source="tiviss"
+        )
         if not self.connected():
             return self._unavailable(request)
         try:
             record = self._backend.retrieve(record_id)
         except MemoryKeyError:
-            return self._response(request, ok=False, error=f"record not found: {record_id}")
+            return self._response(
+                request, ok=False, error=f"record not found: {record_id}"
+            )
         return self._response(request, ok=True, payload=record.to_dict())
 
     def search(self, query: str) -> IntegrationResponse:
-        request = IntegrationRequest(operation="search", payload={"query": query}, source="tiviss")
+        request = IntegrationRequest(
+            operation="search", payload={"query": query}, source="tiviss"
+        )
         if not self.connected():
             return self._unavailable(request)
         result = self._backend.search(query)
         return self._response(
-            request, ok=True,
-            payload={"query": query, "total": result.total, "records": [r.to_dict() for r in result.records]},
+            request,
+            ok=True,
+            payload={
+                "query": query,
+                "total": result.total,
+                "records": [r.to_dict() for r in result.records],
+            },
         )
 
     def clear(self) -> IntegrationResponse:

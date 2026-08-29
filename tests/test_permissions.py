@@ -63,7 +63,9 @@ def test_allowed_operation():
 
 
 def test_denied_operation():
-    policy = DefaultDenyPolicy(allow={Permission.of("memory.*")}, deny={Permission.of("memory.delete")})
+    policy = DefaultDenyPolicy(
+        allow={Permission.of("memory.*")}, deny={Permission.of("memory.delete")}
+    )
     ctx = PermissionContext(source="owner")
     assert policy.check(ctx, Permission.of("memory.store")) is True
     assert policy.check(ctx, Permission.of("memory.delete")) is False

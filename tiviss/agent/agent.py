@@ -8,9 +8,10 @@ permission layer before a provider is consulted.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Mapping
+import contextlib
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 from ..conversation.messages import Request, Response, ResponseStatus
 from ..events.events import Event, EventBus, EventType
@@ -76,7 +77,9 @@ class Agent:
 
     def _emit(self, type_: EventType, **payload: Any) -> Event:
         return self.events.publish(
-            Event.create(type=type_, source=f"agent:{self.identity.agent_id}", payload=payload)
+            Event.create(
+                type=type_, source=f"agent:{self.identity.agent_id}", payload=payload
+            )
         )
 
     def start(self) -> None:
@@ -92,10 +95,7 @@ class Agent:
 
     def stop(self) -> None:
         """Stop the runtime through a controlled shutdown."""
-        if self.state is AgentState.READY:
-            self.lifecycle.transition(AgentState.STOPPING)
-            self.lifecycle.transition(AgentState.STOPPED)
-        elif self.state is AgentState.RUNNING:
+        if self.state is AgentState.READY or self.state is AgentState.RUNNING:
             self.lifecycle.transition(AgentState.STOPPING)
             self.lifecycle.transition(AgentState.STOPPED)
         else:
@@ -156,10 +156,8 @@ class Agent:
         )
 
         if self.memory is not None:
-            try:
+            with contextlib.suppress(MemoryKeyError):
                 self._remember(request)
-            except MemoryKeyError:  # pragma: no cover - defensive
-                pass
         return response
 
     def _authorized(self, request: Request) -> bool:
@@ -187,6 +185,5 @@ class Agent:
 
     @staticmethod
     def _now() -> datetime:
-        from datetime import timezone
 
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)

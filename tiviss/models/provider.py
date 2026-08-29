@@ -7,8 +7,9 @@ interface and can be swapped (local mock today, a real provider later).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 
 class ProviderError(RuntimeError):
@@ -57,11 +58,14 @@ class ModelProvider(ABC):
     def info(self) -> ProviderInfo:
         """Describe the provider and model."""
 
+    @abstractmethod
     def configure(self, config: Mapping[str, Any]) -> None:
         """Apply provider-specific configuration (optional)."""
 
     @abstractmethod
-    def generate(self, content: str, *, context: Mapping[str, Any] | None = None) -> ModelResponse:
+    def generate(
+        self, content: str, *, context: Mapping[str, Any] | None = None
+    ) -> ModelResponse:
         """Generate a model response for ``content``.
 
         Raises :class:`ProviderError` on failure.

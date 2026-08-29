@@ -13,14 +13,19 @@ implemented; ownership changes are driven through :class:`Ownership`.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any
 
 from ..events.events import Event, EventBus, EventType
 from ..identity.identity import utcnow
 from ..identity.ownership import Ownership, OwnershipState, OwnershipTransitionError
-from .state import HandoverStage, HandoverTransitionError, assert_valid_handover_transition
+from .state import (
+    HandoverStage,
+    HandoverTransitionError,
+    assert_valid_handover_transition,
+)
 
 
 class HandoverValidationError(ValueError):
@@ -62,7 +67,7 @@ class HandoverRequest:
         reason: str = "",
         request_id: str | None = None,
         actor: str = "system",
-    ) -> "HandoverRequest":
+    ) -> HandoverRequest:
         errors: list[str] = []
         if not (isinstance(current_owner, str) and current_owner.strip()):
             errors.append("current_owner must be a non-empty string")
@@ -90,7 +95,11 @@ class HandoverRequest:
         return self.stage
 
     def _audit(self, actor: str, action: str, detail: str = "") -> None:
-        self.audit.append(HandoverAuditEntry(actor=actor, action=action, timestamp=utcnow(), detail=detail))
+        self.audit.append(
+            HandoverAuditEntry(
+                actor=actor, action=action, timestamp=utcnow(), detail=detail
+            )
+        )
 
     def _transition(self, target: HandoverStage) -> None:
         assert_valid_handover_transition(self.stage, target)
@@ -135,7 +144,9 @@ class HandoverRequest:
 class Handover:
     """Coordinates a handover between :class:`Ownership` and event emission."""
 
-    def __init__(self, *, ownership: Ownership, event_bus: EventBus | None = None) -> None:
+    def __init__(
+        self, *, ownership: Ownership, event_bus: EventBus | None = None
+    ) -> None:
         self._ownership = ownership
         self.events = event_bus or EventBus()
         self.requests: dict[str, HandoverRequest] = {}
@@ -144,11 +155,14 @@ class Handover:
     def ownership(self) -> Ownership:
         return self._ownership
 
-    def request(self, *, target_owner: str, reason: str = "", actor: str = "system") -> HandoverRequest:
+    def request(
+        self, *, target_owner: str, reason: str = "", actor: str = "system"
+    ) -> HandoverRequest:
         """Validate ownership, create a request, and open a pending transfer."""
         if self._ownership.current_owner is None:
             raise HandoverValidationError(
-                f"handover requires an active owner; ownership is {self._ownership.state.value}"
+                f"handover requires an active owner; ownership is "
+                f"{self._ownership.state.value}"
             )
         handover = HandoverRequest.create(
             current_owner=self._ownership.owner_id,
@@ -185,7 +199,8 @@ class Handover:
             )
         if self._ownership.state is not OwnershipState.TRANSFER_PENDING:
             raise HandoverValidationError(
-                f"ownership must be transfer_pending for an active handover, got {self._ownership.state.value}"
+                "ownership must be transfer_pending for an active handover, got "
+                f"{self._ownership.state.value}"
             )
 
     def approve(self, handover: HandoverRequest, *, approver: str) -> None:
@@ -199,7 +214,9 @@ class Handover:
             )
         )
 
-    def reject(self, handover: HandoverRequest, *, actor: str = "owner", reason: str = "") -> None:
+    def reject(
+        self, handover: HandoverRequest, *, actor: str = "owner", reason: str = ""
+    ) -> None:
         self._require_current_request(handover)
         handover.reject(actor, reason=reason)
         self._ownership.cancel_transfer()
@@ -211,7 +228,9 @@ class Handover:
             )
         )
 
-    def cancel(self, handover: HandoverRequest, *, actor: str = "owner", reason: str = "") -> None:
+    def cancel(
+        self, handover: HandoverRequest, *, actor: str = "owner", reason: str = ""
+    ) -> None:
         self._require_current_request(handover)
         handover.cancel(actor, reason=reason)
         self._ownership.cancel_transfer()
@@ -223,7 +242,9 @@ class Handover:
             )
         )
 
-    def complete(self, handover: HandoverRequest, *, actor: str = "system") -> Ownership:
+    def complete(
+        self, handover: HandoverRequest, *, actor: str = "system"
+    ) -> Ownership:
         """Approve-required completion: transfers ownership to the target."""
         if handover.stage is not HandoverStage.APPROVED:
             raise HandoverTransitionError(handover.stage, HandoverStage.COMPLETED)
@@ -235,7 +256,10 @@ class Handover:
             Event.create(
                 type=EventType.HANDOVER_COMPLETED,
                 source="handover",
-                payload={"request_id": handover.request_id, "new_owner": new_ownership.owner_id},
+                payload={
+                    "request_id": handover.request_id,
+                    "new_owner": new_ownership.owner_id,
+                },
             )
         )
         self.events.publish(

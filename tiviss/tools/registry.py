@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-from ..permissions.permissions import Permission, PermissionContext, PermissionDeniedError
+from ..permissions.permissions import (
+    PermissionContext,
+    PermissionDeniedError,
+)
 from ..permissions.policy import PermissionPolicy
 from .interface import Tool, ToolError, ToolResult, ToolStatus
 
@@ -56,7 +60,10 @@ class ToolRegistry:
         return len(self._tools)
 
     def execute(
-        self, tool_id: str, ctx: PermissionContext, params: Mapping[str, Any] | None = None
+        self,
+        tool_id: str,
+        ctx: PermissionContext,
+        params: Mapping[str, Any] | None = None,
     ) -> ToolResult:
         tool = self.get(tool_id)
         if tool is None:

@@ -7,10 +7,11 @@ adapter can translate between T.I.V.I.S.S. messages and C.O.R.E. messages.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Mapping
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 
 class RequestValidationError(ValueError):
@@ -18,7 +19,7 @@ class RequestValidationError(ValueError):
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class Request:
         request_id: str | None = None,
         timestamp: datetime | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> "Request":
+    ) -> Request:
         errors = []
         if not (isinstance(source, str) and source.strip()):
             errors.append("source must be a non-empty string")
@@ -62,7 +63,7 @@ class Request:
         )
 
 
-class ResponseStatus(str, Enum):
+class ResponseStatus(StrEnum):
     """Outcome of handling a request."""
 
     OK = "ok"
@@ -92,7 +93,7 @@ class Response:
         status: ResponseStatus,
         timestamp: datetime | None = None,
         metadata: Mapping[str, Any] | None = None,
-    ) -> "Response":
+    ) -> Response:
         return cls(
             request_id=request_id,
             agent_id=agent_id,

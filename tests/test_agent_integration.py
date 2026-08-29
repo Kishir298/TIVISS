@@ -20,7 +20,9 @@ from tiviss.permissions import DefaultDenyPolicy, Permission
 
 @pytest.fixture
 def identity():
-    return AgentIdentity.create(agent_id="tiviss-integration", name="tiviss", version="0.1.0", owner_id="kishir")
+    return AgentIdentity.create(
+        agent_id="tiviss-integration", name="tiviss", version="0.1.0", owner_id="kishir"
+    )
 
 
 @pytest.fixture
@@ -38,7 +40,13 @@ def build_agent(identity, events, memory):
     policy = DefaultDenyPolicy(
         allow={Permission.of("conversation.generate"), Permission.of("memory.*")}
     )
-    return Agent(identity=identity, provider=provider, memory=memory, policy=policy, event_bus=events)
+    return Agent(
+        identity=identity,
+        provider=provider,
+        memory=memory,
+        policy=policy,
+        event_bus=events,
+    )
 
 
 def test_full_agent_run_with_memory_and_events(identity, events, memory):
@@ -51,7 +59,9 @@ def test_full_agent_run_with_memory_and_events(identity, events, memory):
     agent.start()
     assert agent.state is AgentState.RUNNING
 
-    request = Request.create(source="owner", content="integration check", metadata={"trace": "t1"})
+    request = Request.create(
+        source="owner", content="integration check", metadata={"trace": "t1"}
+    )
     response = agent.process(request)
 
     assert response.status is ResponseStatus.OK
@@ -68,7 +78,13 @@ def test_full_agent_run_with_memory_and_events(identity, events, memory):
 def test_permission_denied_end_to_end(identity, events, memory):
     provider = MockProvider()
     policy = DefaultDenyPolicy()  # default deny
-    agent = Agent(identity=identity, provider=provider, memory=memory, policy=policy, event_bus=events)
+    agent = Agent(
+        identity=identity,
+        provider=provider,
+        memory=memory,
+        policy=policy,
+        event_bus=events,
+    )
     denied = []
     events.subscribe(lambda e: denied.append(e), EventType.PERMISSION_DENIED)
 
@@ -108,10 +124,14 @@ def test_agent_connects_to_core_adapter(identity, events):
     registered = core.register_agent(agent.identity)
     assert registered.ok
 
-    health = core.report_health({"agent_id": agent.identity.agent_id, "state": agent.state.value})
+    health = core.report_health(
+        {"agent_id": agent.identity.agent_id, "state": agent.state.value}
+    )
     assert health.ok
 
-    published = core.publish_event(agent._emit(EventType.AGENT_STARTED, agent_id=agent.identity.agent_id))
+    published = core.publish_event(
+        agent._emit(EventType.AGENT_STARTED, agent_id=agent.identity.agent_id)
+    )
     assert published.ok
     assert len(core.events_published) == 1
 

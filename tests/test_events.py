@@ -6,7 +6,9 @@ def _count(container):
 
 
 def test_event_creation():
-    event = Event.create(type=EventType.AGENT_STARTED, source="agent:1", payload={"x": 1})
+    event = Event.create(
+        type=EventType.AGENT_STARTED, source="agent:1", payload={"x": 1}
+    )
     assert event.type is EventType.AGENT_STARTED
     assert event.source == "agent:1"
     assert event.payload == {"x": 1}
@@ -48,7 +50,10 @@ def test_bus_typed_subscription():
 def test_bus_unsubscribe():
     bus = EventBus()
     received = []
-    handler = lambda e: received.append(e)
+
+    def handler(e):
+        return received.append(e)
+
     bus.subscribe(handler)
     assert bus.unsubscribe(handler) is True
     bus.publish(Event.create(type=EventType.GENERIC, source="s"))
@@ -96,7 +101,9 @@ def test_handler_error_callback():
         seen.append(exc)
 
     bus = EventBus(handler_error=on_error)
-    bus.subscribe(lambda e: (_ for _ in ()).throw(ValueError("nope")), EventType.GENERIC)
+    bus.subscribe(
+        lambda e: (_ for _ in ()).throw(ValueError("nope")), EventType.GENERIC
+    )
     bus.publish(Event.create(type=EventType.GENERIC, source="s"))
     assert len(seen) == 1
     assert isinstance(seen[0], ValueError)

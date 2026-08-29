@@ -6,7 +6,8 @@ the tool framework end to end.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from ..permissions.permissions import Permission
 from .interface import Tool, ToolError, ToolResult, ToolStatus
@@ -37,7 +38,9 @@ class EchoTool(Tool):
         return {"text": str(params["text"])}
 
     def execute(self, params: Mapping[str, Any]) -> ToolResult:
-        return ToolResult(tool_id=self.tool_id, status=ToolStatus.OK, output=params["text"])
+        return ToolResult(
+            tool_id=self.tool_id, status=ToolStatus.OK, output=params["text"]
+        )
 
 
 class SumTool(Tool):

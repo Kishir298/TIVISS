@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     """States of the T.I.V.I.S.S. agent runtime."""
 
     CREATED = "created"
@@ -18,11 +18,14 @@ class AgentState(str, Enum):
 class LifecycleTransitionError(ValueError):
     """Raised when a lifecycle transition is not allowed."""
 
-    def __init__(self, source: AgentState, target: AgentState, *, message: str | None = None) -> None:
+    def __init__(
+        self, source: AgentState, target: AgentState, *, message: str | None = None
+    ) -> None:
         self.source = source
         self.target = target
         super().__init__(
-            message or f"lifecycle transition {source.value} -> {target.value} is not allowed"
+            message
+            or f"lifecycle transition {source.value} -> {target.value} is not allowed"
         )
 
 

@@ -2,15 +2,17 @@ import pytest
 
 from tiviss.agent import Agent, AgentState, LifecycleTransitionError
 from tiviss.conversation import Request, ResponseStatus
-from tiviss.events import Event, EventBus, EventType
+from tiviss.events import EventBus, EventType
 from tiviss.identity import AgentIdentity
-from tiviss.models import MockProvider, ProviderError
+from tiviss.models import MockProvider
 from tiviss.permissions import DefaultDenyPolicy, Permission
 
 
 @pytest.fixture
 def identity():
-    return AgentIdentity.create(agent_id="tiviss-test", name="tiviss", version="0.1.0", owner_id="kishir")
+    return AgentIdentity.create(
+        agent_id="tiviss-test", name="tiviss", version="0.1.0", owner_id="kishir"
+    )
 
 
 @pytest.fixture

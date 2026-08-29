@@ -7,17 +7,18 @@ forward these events to the ecosystem.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable, Mapping
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Well-known T.I.V.I.S.S. event types."""
 
     AGENT_STARTED = "agent.started"
@@ -76,7 +77,7 @@ class Event:
         metadata: Mapping[str, Any] | None = None,
         event_id: str | None = None,
         timestamp: datetime | None = None,
-    ) -> "Event":
+    ) -> Event:
         return cls(
             event_id=event_id or str(uuid.uuid4()),
             type=EventType(type),
@@ -94,14 +95,18 @@ class EventBus:
     instead of propagating, so one bad handler cannot break dispatch.
     """
 
-    def __init__(self, *, handler_error: Callable[[Event, Exception], None] | None = None) -> None:
+    def __init__(
+        self, *, handler_error: Callable[[Event, Exception], None] | None = None
+    ) -> None:
         self._all_handlers: list[EventSubscriber] = []
         self._typed_handlers: dict[EventType, list[EventSubscriber]] = {}
         self._handler_error = handler_error
         self.published: list[Event] = []
         self.errors: list[tuple[Event, Exception]] = []
 
-    def subscribe(self, handler: EventSubscriber, event_type: EventType | None = None) -> None:
+    def subscribe(
+        self, handler: EventSubscriber, event_type: EventType | None = None
+    ) -> None:
         """Register a handler for all events or a single event type."""
         if event_type is None:
             if handler not in self._all_handlers:
@@ -112,7 +117,9 @@ class EventBus:
         if handler not in handlers:
             handlers.append(handler)
 
-    def unsubscribe(self, handler: EventSubscriber, event_type: EventType | None = None) -> bool:
+    def unsubscribe(
+        self, handler: EventSubscriber, event_type: EventType | None = None
+    ) -> bool:
         """Remove a handler. Returns True when a handler was removed."""
         if event_type is None:
             try:
@@ -132,7 +139,9 @@ class EventBus:
     def publish(self, event: Event) -> Event:
         """Dispatch an event synchronously to all matching handlers."""
         self.published.append(event)
-        handlers = list(self._all_handlers) + list(self._typed_handlers.get(event.type, []))
+        handlers = list(self._all_handlers) + list(
+            self._typed_handlers.get(event.type, [])
+        )
         # de-duplicate handlers (all-handler + typed registration)
         seen: list[EventSubscriber] = []
         for handler in handlers:

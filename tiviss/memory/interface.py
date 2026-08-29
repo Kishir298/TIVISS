@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class MemoryKeyError(KeyError):
@@ -38,7 +39,9 @@ class MemoryRecord:
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
 
-    def with_content(self, content: str, *, metadata: Mapping[str, Any] | None = None) -> "MemoryRecord":
+    def with_content(
+        self, content: str, *, metadata: Mapping[str, Any] | None = None
+    ) -> MemoryRecord:
         modified = MemoryRecord(
             key=self.key,
             content=content,
@@ -60,7 +63,7 @@ class MemoryRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "MemoryRecord":
+    def from_dict(cls, data: Mapping[str, Any]) -> MemoryRecord:
         def _parse(value: str) -> datetime:
             return datetime.fromisoformat(value)
 
@@ -96,7 +99,13 @@ class MemoryBackend(ABC):
         """Return a record by ID or raise :class:`MemoryKeyError`."""
 
     @abstractmethod
-    def update(self, record_id: str, *, content: str | None = None, metadata: Mapping[str, Any] | None = None) -> bool:
+    def update(
+        self,
+        record_id: str,
+        *,
+        content: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> bool:
         """Update content/metadata of a record. Returns False when missing."""
 
     @abstractmethod

@@ -3,4 +3,10 @@
 from .interface import MemoryBackend, MemoryKeyError, MemoryRecord, MemorySearchResult
 from .local import LocalMemory
 
-__all__ = ["MemoryBackend", "MemoryKeyError", "MemoryRecord", "MemorySearchResult", "LocalMemory"]
+__all__ = [
+    "MemoryBackend",
+    "MemoryKeyError",
+    "MemoryRecord",
+    "MemorySearchResult",
+    "LocalMemory",
+]

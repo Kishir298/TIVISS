@@ -8,9 +8,10 @@ result, allowing the registry and permission layer to gate execution.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Mapping
+from enum import StrEnum
+from typing import Any
 
 from ..permissions.permissions import Permission
 
@@ -19,7 +20,7 @@ class ToolError(Exception):
     """Raised for tool input validation failures and internal tool errors."""
 
 
-class ToolStatus(str, Enum):
+class ToolStatus(StrEnum):
     OK = "ok"
     DENIED = "denied"
     FAILED = "failed"
@@ -67,7 +68,10 @@ class Tool(ABC):
         return [self.permission]
 
     def validate_input(self, params: Mapping[str, Any]) -> Mapping[str, Any]:
-        """Validate and normalize parameters. Raise :class:`ToolError` on invalid input."""
+        """Validate and normalize parameters.
+
+        Raise :class:`ToolError` on invalid input.
+        """
         return dict(params)
 
     @abstractmethod

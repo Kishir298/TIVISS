@@ -10,7 +10,9 @@ from tiviss.integrations import IntegrationStatus, LocalCOREAdapter
 
 @pytest.fixture
 def identity():
-    return AgentIdentity.create(agent_id="tiviss-int", name="tiviss", version="0.1.0", owner_id="kishir")
+    return AgentIdentity.create(
+        agent_id="tiviss-int", name="tiviss", version="0.1.0", owner_id="kishir"
+    )
 
 
 @pytest.fixture

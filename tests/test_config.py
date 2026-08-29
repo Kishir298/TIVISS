@@ -81,7 +81,9 @@ def test_load_env_without_overrides_uses_defaults(monkeypatch):
 
 
 def test_build_identity():
-    config = TIVISSConfig.load({"agent": {"name": "tiv", "owner_id": "kishir", "agent_id": "tiv-1"}})
+    config = TIVISSConfig.load(
+        {"agent": {"name": "tiv", "owner_id": "kishir", "agent_id": "tiv-1"}}
+    )
     identity = config.build_identity()
     assert isinstance(identity, AgentIdentity)
     assert identity.agent_id == "tiv-1"
@@ -102,12 +104,22 @@ def test_build_policy():
     ctx_policy = policy
     from tiviss.permissions import Permission, PermissionContext
 
-    assert ctx_policy.check(PermissionContext(source="owner"), Permission.of("memory.store")) is True
-    assert ctx_policy.check(PermissionContext(source="owner"), Permission.of("tools.run")) is False
+    assert (
+        ctx_policy.check(
+            PermissionContext(source="owner"), Permission.of("memory.store")
+        )
+        is True
+    )
+    assert (
+        ctx_policy.check(PermissionContext(source="owner"), Permission.of("tools.run"))
+        is False
+    )
 
 
 def test_build_memory(tmp_path):
-    config = TIVISSConfig.load({"memory": {"backend": "local", "storage_path": str(tmp_path / "m.json")}})
+    config = TIVISSConfig.load(
+        {"memory": {"backend": "local", "storage_path": str(tmp_path / "m.json")}}
+    )
     memory = config.build_memory()
     assert isinstance(memory, LocalMemory)
 

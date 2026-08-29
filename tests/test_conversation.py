@@ -1,6 +1,11 @@
 import pytest
 
-from tiviss.conversation import Request, RequestValidationError, Response, ResponseStatus
+from tiviss.conversation import (
+    Request,
+    RequestValidationError,
+    Response,
+    ResponseStatus,
+)
 
 
 def test_request_creation_defaults():
@@ -28,7 +33,9 @@ def test_request_empty_content_rejected():
 
 
 def test_response_creation_and_defaults():
-    response = Response.create(request_id="req-1", agent_id="tiviss-1", content="ack", status=ResponseStatus.OK)
+    response = Response.create(
+        request_id="req-1", agent_id="tiviss-1", content="ack", status=ResponseStatus.OK
+    )
     assert response.request_id == "req-1"
     assert response.agent_id == "tiviss-1"
     assert response.ok
@@ -43,12 +50,15 @@ def test_response_status_values():
 
 def test_response_not_ok_when_denied():
     response = Response.create(
-        request_id="req-1", agent_id="tiviss-1", content="no", status=ResponseStatus.DENIED
+        request_id="req-1",
+        agent_id="tiviss-1",
+        content="no",
+        status=ResponseStatus.DENIED,
     )
     assert response.ok is False
 
 
 def test_request_is_immutable():
     request = Request.create(source="owner", content="x")
-    with pytest.raises(Exception):
+    with pytest.raises(AttributeError):
         request.content = "y"  # type: ignore[misc]

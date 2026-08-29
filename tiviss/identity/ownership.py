@@ -11,12 +11,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from .identity import utcnow
 
 
-class OwnershipState(str, Enum):
+class OwnershipState(StrEnum):
     """State of an ownership relationship."""
 
     ACTIVE = "active"
@@ -48,7 +48,9 @@ class OwnershipTransfer:
 #
 # TRANSFERRED and REVOKED are terminal states.
 _ALLOWED_TRANSITIONS: dict[OwnershipState, frozenset[OwnershipState]] = {
-    OwnershipState.ACTIVE: frozenset({OwnershipState.TRANSFER_PENDING, OwnershipState.REVOKED}),
+    OwnershipState.ACTIVE: frozenset(
+        {OwnershipState.TRANSFER_PENDING, OwnershipState.REVOKED}
+    ),
     OwnershipState.TRANSFER_PENDING: frozenset(
         {OwnershipState.ACTIVE, OwnershipState.TRANSFERRED, OwnershipState.REVOKED}
     ),
@@ -74,7 +76,7 @@ class Ownership:
     history: list[OwnershipTransfer] = field(default_factory=list)
 
     @classmethod
-    def create(cls, owner_id: str) -> "Ownership":
+    def create(cls, owner_id: str) -> Ownership:
         """Start ownership for ``owner_id`` in the ACTIVE state."""
         if not (isinstance(owner_id, str) and owner_id.strip()):
             raise OwnershipTransitionError("owner_id must be a non-empty string")
@@ -88,7 +90,8 @@ class Ownership:
     def _transition(self, new_state: OwnershipState, *, reason: str = "") -> None:
         if new_state not in _ALLOWED_TRANSITIONS[self.state]:
             raise OwnershipTransitionError(
-                f"ownership transition {self.state.value} -> {new_state.value} is not allowed"
+                f"ownership transition {self.state.value} -> "
+                f"{new_state.value} is not allowed"
             )
         self.state = new_state
         self.updated_at = utcnow()
@@ -98,7 +101,9 @@ class Ownership:
         if not (isinstance(target_owner, str) and target_owner.strip()):
             raise OwnershipTransitionError("target_owner must be a non-empty string")
         if target_owner == self.owner_id:
-            raise OwnershipTransitionError("target_owner must differ from the current owner")
+            raise OwnershipTransitionError(
+                "target_owner must differ from the current owner"
+            )
         self._transition(OwnershipState.TRANSFER_PENDING)
         self.pending_target = target_owner
 
@@ -118,7 +123,7 @@ class Ownership:
         self.pending_target = None
         self._transition(OwnershipState.REVOKED)
 
-    def complete_transfer(self) -> "Ownership":
+    def complete_transfer(self) -> Ownership:
         """Complete a pending transfer and return ownership for the new owner.
 
         The new owner becomes ACTIVE; this record is terminal (TRANSFERRED)
@@ -130,7 +135,11 @@ class Ownership:
         completed_at = utcnow()
         self.pending_target = None
         self.history.append(
-            OwnershipTransfer(previous_owner=self.owner_id, new_owner=target, transferred_at=completed_at)
+            OwnershipTransfer(
+                previous_owner=self.owner_id,
+                new_owner=target,
+                transferred_at=completed_at,
+            )
         )
         self._transition(OwnershipState.TRANSFERRED)
         return Ownership(

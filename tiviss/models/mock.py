@@ -6,7 +6,8 @@ and integration tests are repeatable without any external model service.
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from .provider import ModelProvider, ModelResponse, ProviderError, ProviderInfo
 
@@ -59,7 +60,9 @@ class MockProvider(ModelProvider):
         if "model_id" in config:
             self._model_id = str(config["model_id"])
 
-    def generate(self, content: str, *, context: Mapping[str, Any] | None = None) -> ModelResponse:
+    def generate(
+        self, content: str, *, context: Mapping[str, Any] | None = None
+    ) -> ModelResponse:
         if not self.available():
             raise ProviderError(
                 f"provider {self.provider_id}/{self.model_id} is not available"
@@ -73,7 +76,7 @@ class MockProvider(ModelProvider):
             try:
                 echoed = " ".join(echoed.split()[: int(context["wordlimit"])])
             except ValueError:
-                raise ProviderError("invalid wordlimit in context")
+                raise ProviderError("invalid wordlimit in context") from None
 
         return ModelResponse(
             content=f"{self._prefix}({self.model_id}): {echoed}",

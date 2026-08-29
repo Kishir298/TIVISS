@@ -9,17 +9,18 @@ changes.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Mapping
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 
 class IdentityValidationError(ValueError):
     """Raised when an agent identity is invalid."""
 
 
-class IdentityState(str, Enum):
+class IdentityState(StrEnum):
     """Lifecycle state of an agent identity."""
 
     ACTIVE = "active"
@@ -28,7 +29,7 @@ class IdentityState(str, Enum):
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ class AgentIdentity:
         state: IdentityState | str = IdentityState.ACTIVE,
         created_at: datetime | None = None,
         meta: Mapping[str, Any] | None = None,
-    ) -> "AgentIdentity":
+    ) -> AgentIdentity:
         """Create a validated identity.
 
         If ``agent_id`` is omitted a new UUID is generated. An explicit
@@ -77,7 +78,9 @@ class AgentIdentity:
             raise IdentityValidationError("; ".join(errors))
 
         try:
-            state_value = IdentityState(state) if not isinstance(state, IdentityState) else state
+            state_value = (
+                IdentityState(state) if not isinstance(state, IdentityState) else state
+            )
         except ValueError as exc:  # pragma: no cover - guarded by validate()
             raise IdentityValidationError(f"unknown identity state: {state!r}") from exc
 
@@ -104,7 +107,9 @@ class AgentIdentity:
     ) -> list[str]:
         """Return a list of validation errors (empty when valid)."""
         errors: list[str] = []
-        if agent_id is not None and not (isinstance(agent_id, str) and agent_id.strip()):
+        if agent_id is not None and not (
+            isinstance(agent_id, str) and agent_id.strip()
+        ):
             errors.append("agent_id must be a non-empty string")
         if not (isinstance(name, str) and name.strip()):
             errors.append("name must be a non-empty string")
@@ -126,7 +131,7 @@ class AgentIdentity:
         return errors
 
     @staticmethod
-    def validate_identity(identity: "AgentIdentity") -> list[str]:
+    def validate_identity(identity: AgentIdentity) -> list[str]:
         """Validate an existing identity record."""
         return AgentIdentity.validate(
             name=identity.name,

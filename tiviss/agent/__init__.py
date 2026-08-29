@@ -2,7 +2,7 @@
 
 from .agent import Agent, AgentStatus
 from .lifecycle import LifecycleManager
-from .state import AgentState, LifecycleTransitionError, TRANSITIONS
+from .state import TRANSITIONS, AgentState, LifecycleTransitionError
 
 __all__ = [
     "Agent",

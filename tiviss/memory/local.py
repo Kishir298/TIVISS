@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from .interface import MemoryBackend, MemoryKeyError, MemoryRecord, MemorySearchResult
 
@@ -18,7 +19,9 @@ class LocalMemory(MemoryBackend):
     explicitly.
     """
 
-    def __init__(self, *, storage_path: str | Path | None = None, autosave: bool = True) -> None:
+    def __init__(
+        self, *, storage_path: str | Path | None = None, autosave: bool = True
+    ) -> None:
         self._records: dict[str, MemoryRecord] = {}
         self._storage_path = Path(storage_path) if storage_path is not None else None
         self._autosave = autosave
@@ -74,7 +77,7 @@ class LocalMemory(MemoryBackend):
         ]
         matched.sort(key=lambda r: r.updated_at, reverse=True)
         if limit is not None:
-            matched = matched[:max(0, limit)]
+            matched = matched[: max(0, limit)]
         return MemorySearchResult(
             query=query,
             total=len(matched),
@@ -119,5 +122,6 @@ class LocalMemory(MemoryBackend):
         data = json.loads(self._storage_path.read_text(encoding="utf-8"))
         records = data.get("records", [])
         self._records = {
-            str(record["record_id"]): MemoryRecord.from_dict(record) for record in records
+            str(record["record_id"]): MemoryRecord.from_dict(record)
+            for record in records
         }

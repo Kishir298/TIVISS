@@ -11,11 +11,12 @@ This adapter does NOT duplicate C.O.R.E. functionality.
 from __future__ import annotations
 
 from abc import ABC
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-from ..configuration.config import CoreSettings, TIVISSConfig
+from ..configuration.config import CoreSettings
 from ..conversation.messages import Request
-from ..events.events import Event, EventType
+from ..events.events import Event
 from ..identity.identity import AgentIdentity
 from ..models.provider import ProviderError  # noqa: F401  (re-export convenience)
 from .base import (
@@ -84,8 +85,13 @@ class LocalCOREAdapter(COREAdapter):
         }
 
     def _response(
-        self, request: IntegrationRequest, *, ok: bool, status: IntegrationStatus | None = None,
-        payload: Mapping[str, Any] | None = None, error: str | None = None,
+        self,
+        request: IntegrationRequest,
+        *,
+        ok: bool,
+        status: IntegrationStatus | None = None,
+        payload: Mapping[str, Any] | None = None,
+        error: str | None = None,
     ) -> IntegrationResponse:
         if self._failure_mode:
             return IntegrationResponse(
@@ -103,17 +109,26 @@ class LocalCOREAdapter(COREAdapter):
         )
 
     def register_agent(self, identity: AgentIdentity) -> IntegrationResponse:
-        request = IntegrationRequest(operation="register_agent", payload={"agent_id": identity.agent_id}, source=identity.agent_id)
+        request = IntegrationRequest(
+            operation="register_agent",
+            payload={"agent_id": identity.agent_id},
+            source=identity.agent_id,
+        )
         if not self.connected():
             return self._unavailable(request)
         self.registered.append(identity)
         return self._response(
-            request, ok=True,
+            request,
+            ok=True,
             payload={"status": "registered", "agent_id": identity.agent_id},
         )
 
     def report_health(self, status: Mapping[str, Any]) -> IntegrationResponse:
-        request = IntegrationRequest(operation="report_health", payload=dict(status), source=status.get("agent_id", "unknown"))
+        request = IntegrationRequest(
+            operation="report_health",
+            payload=dict(status),
+            source=status.get("agent_id", "unknown"),
+        )
         if not self.connected():
             return self._unavailable(request)
         self.health_reports.append(dict(status))
@@ -132,7 +147,9 @@ class LocalCOREAdapter(COREAdapter):
 
     def send_request(self, request: Request) -> IntegrationResponse:
         transport = IntegrationRequest(
-            operation="send_request", payload={"content": request.content}, source=request.source
+            operation="send_request",
+            payload={"content": request.content},
+            source=request.source,
         )
         if not self.connected():
             return self._unavailable(transport)
@@ -140,10 +157,13 @@ class LocalCOREAdapter(COREAdapter):
         return self._response(
             transport,
             ok=True,
-            payload={"content": f"core-echo: {request.content}", "correlates": transport.request_id},
+            payload={
+                "content": f"core-echo: {request.content}",
+                "correlates": transport.request_id,
+            },
         )
 
     @classmethod
-    def from_config(cls, config: CoreSettings) -> "LocalCOREAdapter":
+    def from_config(cls, config: CoreSettings) -> LocalCOREAdapter:
         """Build a local adapter from C.O.R.E. integration settings."""
         return cls(failure_mode=not config.enabled)

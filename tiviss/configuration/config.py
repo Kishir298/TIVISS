@@ -9,8 +9,9 @@ environment variables. No secrets are hard-coded here.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Mapping
+from typing import Any, ClassVar
 
 from .. import __version__ as _package_version
 
@@ -76,7 +77,7 @@ class TIVISSConfig:
     rescs: RescsSettings = field(default_factory=RescsSettings)
 
     @classmethod
-    def defaults(cls) -> "TIVISSConfig":
+    def defaults(cls) -> TIVISSConfig:
         return cls()
 
     def validate(self) -> list[str]:
@@ -92,12 +93,18 @@ class TIVISSConfig:
             errors.append("agent.agent_id must be a non-empty string when provided")
 
         if self.model.provider_id not in {"mock", "local"}:
-            errors.append(f"model.provider_id must be one of 'mock', 'local'; got {self.model.provider_id!r}")
+            errors.append(
+                "model.provider_id must be one of 'mock', 'local'; got "
+                f"{self.model.provider_id!r}"
+            )
         if not self.model.model_id.strip():
             errors.append("model.model_id must be a non-empty string")
 
         if self.memory.backend not in {"local", "rescs"}:
-            errors.append(f"memory.backend must be one of 'local', 'rescs'; got {self.memory.backend!r}")
+            errors.append(
+                "memory.backend must be one of 'local', 'rescs'; got "
+                f"{self.memory.backend!r}"
+            )
 
         for permission in [*self.permissions.allow, *self.permissions.deny]:
             if not self._valid_permission(permission):
@@ -131,7 +138,10 @@ class TIVISSConfig:
             "agent": self.agent.__dict__,
             "model": self.model.__dict__,
             "memory": self.memory.__dict__,
-            "permissions": {"allow": list(self.permissions.allow), "deny": list(self.permissions.deny)},
+            "permissions": {
+                "allow": list(self.permissions.allow),
+                "deny": list(self.permissions.deny),
+            },
             "runtime": self.runtime.__dict__,
             "core": self.core.__dict__,
             "rescs": self.rescs.__dict__,
@@ -154,7 +164,9 @@ class TIVISSConfig:
 
         if self.model.provider_id == "mock":
             return MockProvider(model_id=self.model.model_id, prefix=self.model.prefix)
-        raise ConfigValidationError(f"provider {self.model.provider_id!r} is not implemented yet")
+        raise ConfigValidationError(
+            f"provider {self.model.provider_id!r} is not implemented yet"
+        )
 
     def build_policy(self):
         from ..permissions.permissions import Permission
@@ -191,7 +203,7 @@ class TIVISSConfig:
     }
 
     @classmethod
-    def load(cls, data: Mapping[str, Any]) -> "TIVISSConfig":
+    def load(cls, data: Mapping[str, Any]) -> TIVISSConfig:
         """Load from a mapping, then normalise and validate."""
         config = cls.defaults()
         agent = data.get("agent") or {}
@@ -205,7 +217,9 @@ class TIVISSConfig:
         config.agent = AgentSettings(
             name=str(agent.get("name", config.agent.name)),
             version=str(agent.get("version", config.agent.version)),
-            agent_id=str(agent["agent_id"]) if agent.get("agent_id") is not None else None,
+            agent_id=str(agent["agent_id"])
+            if agent.get("agent_id") is not None
+            else None,
             owner_id=str(agent.get("owner_id", config.agent.owner_id)),
         )
         config.model = ModelSettings(
@@ -215,20 +229,28 @@ class TIVISSConfig:
         )
         config.memory = MemorySettings(
             backend=str(memory.get("backend", config.memory.backend)),
-            storage_path=str(memory["storage_path"]) if memory.get("storage_path") else None,
+            storage_path=str(memory["storage_path"])
+            if memory.get("storage_path")
+            else None,
         )
         config.permissions = PermissionSettings(
             allow=[str(p) for p in (permissions.get("allow") or [])],
             deny=[str(p) for p in (permissions.get("deny") or [])],
         )
-        config.runtime = RuntimeSettings(enabled=bool(runtime.get("enabled", config.runtime.enabled)))
-        config.core = CoreSettings(enabled=bool(core.get("enabled", False)), endpoint=core.get("endpoint"))
-        config.rescs = RescsSettings(enabled=bool(rescs.get("enabled", False)), endpoint=rescs.get("endpoint"))
+        config.runtime = RuntimeSettings(
+            enabled=bool(runtime.get("enabled", config.runtime.enabled))
+        )
+        config.core = CoreSettings(
+            enabled=bool(core.get("enabled", False)), endpoint=core.get("endpoint")
+        )
+        config.rescs = RescsSettings(
+            enabled=bool(rescs.get("enabled", False)), endpoint=rescs.get("endpoint")
+        )
         config.assert_valid()
         return config
 
     @classmethod
-    def load_env(cls, environ: Mapping[str, str] | None = None) -> "TIVISSConfig":
+    def load_env(cls, environ: Mapping[str, str] | None = None) -> TIVISSConfig:
         """Load configuration from ``TIVISS_*`` environment variables."""
         env = os.environ if environ is None else environ
 
@@ -240,7 +262,11 @@ class TIVISSConfig:
             return None
 
         def _to_list(value: str | None) -> list[str]:
-            return [item.strip() for item in value.split(",") if item.strip()] if value else []
+            return (
+                [item.strip() for item in value.split(",") if item.strip()]
+                if value
+                else []
+            )
 
         config = cls.defaults()
         if name := _get("TIVISS_AGENT_NAME"):
@@ -264,10 +290,20 @@ class TIVISSConfig:
         if raw_deny := _get("TIVISS_PERMISSION_DENY"):
             config.permissions.deny = _to_list(raw_deny)
         if raw_runtime := _get("TIVISS_RUNTIME_ENABLED"):
-            config.runtime.enabled = raw_runtime.strip().lower() in {"1", "true", "yes", "on"}
+            config.runtime.enabled = raw_runtime.strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
         if raw_core := _get("TIVISS_CORE_ENABLED"):
             config.core.enabled = raw_core.strip().lower() in {"1", "true", "yes", "on"}
         if raw_rescs := _get("TIVISS_RESCS_ENABLED"):
-            config.rescs.enabled = raw_rescs.strip().lower() in {"1", "true", "yes", "on"}
+            config.rescs.enabled = raw_rescs.strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
         config.assert_valid()
         return config

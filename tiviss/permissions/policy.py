@@ -21,7 +21,9 @@ class PermissionPolicy(ABC):
     def assert_allowed(self, ctx: PermissionContext, permission: Permission) -> None:
         """Raise :class:`PermissionDeniedError` when the check fails."""
         if not self.check(ctx, permission):
-            raise PermissionDeniedError(permission, source=ctx.source, context=self.__class__.__name__)
+            raise PermissionDeniedError(
+                permission, source=ctx.source, context=self.__class__.__name__
+            )
 
 
 class DefaultDenyPolicy(PermissionPolicy):
@@ -43,13 +45,25 @@ class DefaultDenyPolicy(PermissionPolicy):
         self._deny: set[Permission] = set(deny or {})
 
     def allow(self, permission: Permission | str) -> None:
-        self._allow.add(permission if isinstance(permission, Permission) else Permission.of(permission))
+        self._allow.add(
+            permission
+            if isinstance(permission, Permission)
+            else Permission.of(permission)
+        )
 
     def deny(self, permission: Permission | str) -> None:
-        self._deny.add(permission if isinstance(permission, Permission) else Permission.of(permission))
+        self._deny.add(
+            permission
+            if isinstance(permission, Permission)
+            else Permission.of(permission)
+        )
 
     def revoke_allow(self, permission: Permission | str) -> None:
-        target = permission if isinstance(permission, Permission) else Permission.of(permission)
+        target = (
+            permission
+            if isinstance(permission, Permission)
+            else Permission.of(permission)
+        )
         self._allow.add(target)  # ensure normalized type
         self._allow.discard(target)
 
@@ -65,7 +79,4 @@ class DefaultDenyPolicy(PermissionPolicy):
         for rule in self._deny:
             if rule.matches(permission):
                 return False
-        for rule in self._allow:
-            if rule.matches(permission):
-                return True
-        return False
+        return any(rule.matches(permission) for rule in self._allow)

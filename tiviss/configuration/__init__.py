@@ -1,5 +1,5 @@
 """T.I.V.I.S.S. configuration: validated settings with environment overrides."""
 
-from .config import TIVISSConfig
+from .config import ConfigValidationError, TIVISSConfig
 
-__all__ = ["TIVISSConfig"]
+__all__ = ["ConfigValidationError", "TIVISSConfig"]

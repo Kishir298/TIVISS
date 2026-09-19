@@ -12,6 +12,22 @@ from typing import Any
 from .provider import ModelProvider, ModelResponse, ProviderError, ProviderInfo
 
 
+def _validate_timeout(timeout_s: float | None) -> None:
+    """Validate ``timeout_s``; raise :class:`ProviderError` when invalid."""
+    if timeout_s is None:
+        return
+    if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)):
+        raise ProviderError("timeout_s must be a positive number of seconds")
+    try:
+        value = float(timeout_s)
+    except (TypeError, ValueError):
+        raise ProviderError("timeout_s must be a positive number of seconds") from None
+    import math
+
+    if not math.isfinite(value) or value <= 0:
+        raise ProviderError("timeout_s must be a positive number of seconds")
+
+
 class MockProvider(ModelProvider):
     """Local provider with deterministic output.
 
@@ -61,8 +77,13 @@ class MockProvider(ModelProvider):
             self._model_id = str(config["model_id"])
 
     def generate(
-        self, content: str, *, context: Mapping[str, Any] | None = None
+        self,
+        content: str,
+        *,
+        context: Mapping[str, Any] | None = None,
+        timeout_s: float | None = None,
     ) -> ModelResponse:
+        _validate_timeout(timeout_s)
         if not self.available():
             raise ProviderError(
                 f"provider {self.provider_id}/{self.model_id} is not available"

@@ -64,9 +64,18 @@ class ModelProvider(ABC):
 
     @abstractmethod
     def generate(
-        self, content: str, *, context: Mapping[str, Any] | None = None
+        self,
+        content: str,
+        *,
+        context: Mapping[str, Any] | None = None,
+        timeout_s: float | None = None,
     ) -> ModelResponse:
         """Generate a model response for ``content``.
+
+        ``timeout_s`` is an optional per-request timeout in seconds. When
+        given it must be a positive, finite number; zero, negative, NaN,
+        infinite, or non-numeric values are rejected with
+        :class:`ProviderError`. ``None`` (the default) means no timeout.
 
         Raises :class:`ProviderError` on failure.
         """

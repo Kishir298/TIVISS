@@ -115,9 +115,15 @@ class Agent:
             memory_stored=self.memory_stored,
         )
 
-    def process(self, request: Request) -> Response:
+    def process(
+        self, request: Request, *, timeout_s: float | None = None
+    ) -> Response:
         """Handle one request. Returns a structured response; never raises for
         expected failures (permission denied, provider failure, agent stopped).
+
+        ``timeout_s`` is an optional per-request timeout in seconds passed
+        through to the provider. Invalid values surface as a ``FAILED``
+        response with ``reason`` ``provider_error``.
         """
         self.lifecycle.require(AgentState.RUNNING)
 
@@ -132,7 +138,9 @@ class Agent:
 
         try:
             model_response = self.provider.generate(
-                request.content, context=dict(request.metadata)
+                request.content,
+                context=dict(request.metadata),
+                timeout_s=timeout_s,
             )
         except ProviderError as exc:
             return Response.create(

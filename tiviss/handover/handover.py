@@ -115,15 +115,21 @@ class HandoverRequest:
         self._audit(approver, "approved")
 
     def reject(self, actor: str, *, reason: str = "") -> None:
+        if not (isinstance(actor, str) and actor.strip()):
+            raise HandoverValidationError("actor must be a non-empty string")
         self._transition(HandoverStage.REJECTED)
         self.rejection_reason = reason
         self._audit(actor, "rejected", reason)
 
     def cancel(self, actor: str, *, reason: str = "") -> None:
+        if not (isinstance(actor, str) and actor.strip()):
+            raise HandoverValidationError("actor must be a non-empty string")
         self._transition(HandoverStage.CANCELLED)
         self._audit(actor, "cancelled", reason)
 
     def complete(self, actor: str) -> None:
+        if not (isinstance(actor, str) and actor.strip()):
+            raise HandoverValidationError("actor must be a non-empty string")
         self._transition(HandoverStage.COMPLETED)
         self.completed_at = utcnow()
         self._audit(actor, "completed")
@@ -131,11 +137,11 @@ class HandoverRequest:
     def validate(self) -> list[str]:
         """Independent validation; returns a list of problems (empty when valid)."""
         errors: list[str] = []
-        if not self.request_id:
+        if not (isinstance(self.request_id, str) and self.request_id.strip()):
             errors.append("request_id is required")
-        if not self.current_owner:
+        if not (isinstance(self.current_owner, str) and self.current_owner.strip()):
             errors.append("current_owner is required")
-        if not self.target_owner:
+        if not (isinstance(self.target_owner, str) and self.target_owner.strip()):
             errors.append("target_owner is required")
         if self.current_owner == self.target_owner:
             errors.append("target_owner must differ from current_owner")
@@ -209,6 +215,14 @@ class Handover:
                 "ownership must be transfer_pending for an active handover, got "
                 f"{self._ownership.state.value}"
             )
+        if self._ownership.pending_target is None:
+            raise HandoverValidationError(
+                "ownership has no pending transfer target for this handover"
+            )
+        if handover.target_owner != self._ownership.pending_target:
+            raise HandoverValidationError(
+                "handover target does not match the pending ownership transfer"
+            )
 
     @staticmethod
     def _precheck_transition(handover: HandoverRequest, target: HandoverStage) -> None:
@@ -232,6 +246,8 @@ class Handover:
     def reject(
         self, handover: HandoverRequest, *, actor: str = "owner", reason: str = ""
     ) -> None:
+        if not (isinstance(actor, str) and actor.strip()):
+            raise HandoverValidationError("actor must be a non-empty string")
         self._require_current_request(handover)
         self._precheck_transition(handover, HandoverStage.REJECTED)
         self._ownership.cancel_transfer()
@@ -247,6 +263,8 @@ class Handover:
     def cancel(
         self, handover: HandoverRequest, *, actor: str = "owner", reason: str = ""
     ) -> None:
+        if not (isinstance(actor, str) and actor.strip()):
+            raise HandoverValidationError("actor must be a non-empty string")
         self._require_current_request(handover)
         self._precheck_transition(handover, HandoverStage.CANCELLED)
         self._ownership.cancel_transfer()
@@ -263,6 +281,8 @@ class Handover:
         self, handover: HandoverRequest, *, actor: str = "system"
     ) -> Ownership:
         """Approve-required completion: transfers ownership to the target."""
+        if not (isinstance(actor, str) and actor.strip()):
+            raise HandoverValidationError("actor must be a non-empty string")
         if handover.stage is not HandoverStage.APPROVED:
             raise HandoverTransitionError(handover.stage, HandoverStage.COMPLETED)
 

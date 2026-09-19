@@ -23,6 +23,9 @@ dev = [
     "ruff",
 ]
 
+[project.scripts]
+tiviss = "tiviss.cli.main:main"
+
 [tool.setuptools.packages.find]
 include = ["tiviss*", "tiviss.*"]
 

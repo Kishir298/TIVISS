@@ -74,6 +74,8 @@ class Ownership:
     created_at: datetime = field(default_factory=utcnow)
     updated_at: datetime = field(default_factory=utcnow)
     history: list[OwnershipTransfer] = field(default_factory=list)
+    note: str = ""
+    """Latest operator note (e.g. revocation reason); audit-only."""
 
     @classmethod
     def create(cls, owner_id: str) -> Ownership:
@@ -104,6 +106,10 @@ class Ownership:
             raise OwnershipTransitionError(
                 "target_owner must differ from the current owner"
             )
+        if self.state is not OwnershipState.ACTIVE:
+            raise OwnershipTransitionError(
+                f"ownership transfer requires active ownership, got {self.state.value}"
+            )
         self._transition(OwnershipState.TRANSFER_PENDING)
         self.pending_target = target_owner
 
@@ -111,17 +117,22 @@ class Ownership:
         """Cancel a pending transfer, returning to ACTIVE."""
         if self.pending_target is None:
             raise OwnershipTransitionError("no pending transfer to cancel")
-        self.pending_target = None
+        if self.state is not OwnershipState.TRANSFER_PENDING:
+            raise OwnershipTransitionError(
+                f"no pending transfer to cancel from state {self.state.value}"
+            )
         self._transition(OwnershipState.ACTIVE)
+        self.pending_target = None
 
     def revoke(self, *, reason: str = "") -> None:
-        """Revoke the current or pending ownership."""
+        """Revoke the current or pending ownership (reason kept as a note)."""
         if self.state in (OwnershipState.TRANSFERRED, OwnershipState.REVOKED):
             raise OwnershipTransitionError(
                 f"ownership is already in terminal state {self.state.value}"
             )
-        self.pending_target = None
         self._transition(OwnershipState.REVOKED)
+        self.pending_target = None
+        self.note = reason
 
     def complete_transfer(self) -> Ownership:
         """Complete a pending transfer and return ownership for the new owner.
@@ -131,8 +142,13 @@ class Ownership:
         """
         if self.pending_target is None:
             raise OwnershipTransitionError("no pending transfer to complete")
+        if self.state is not OwnershipState.TRANSFER_PENDING:
+            raise OwnershipTransitionError(
+                f"no pending transfer to complete from state {self.state.value}"
+            )
         target = self.pending_target
         completed_at = utcnow()
+        self._transition(OwnershipState.TRANSFERRED)
         self.pending_target = None
         self.history.append(
             OwnershipTransfer(
@@ -141,7 +157,6 @@ class Ownership:
                 transferred_at=completed_at,
             )
         )
-        self._transition(OwnershipState.TRANSFERRED)
         return Ownership(
             owner_id=target,
             state=OwnershipState.ACTIVE,

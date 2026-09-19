@@ -78,14 +78,15 @@ class HandoverRequest:
         if errors:
             raise HandoverValidationError("; ".join(errors))
 
+        now = utcnow()
         request = cls(
             request_id=request_id or str(uuid.uuid4()),
             current_owner=current_owner,
             target_owner=target_owner,
             reason=reason,
             stage=HandoverStage.REQUESTED,
-            created_at=utcnow(),
-            updated_at=utcnow(),
+            created_at=now,
+            updated_at=now,
         )
         request._audit(actor, "requested", reason)
         return request
@@ -170,8 +171,9 @@ class Handover:
             reason=reason,
             actor=actor,
         )
-        if not handover.validate() == []:
-            raise HandoverValidationError("; ".join(handover.validate()))
+        problems = handover.validate()
+        if problems:
+            raise HandoverValidationError("; ".join(problems))
 
         try:
             self._ownership.begin_transfer(target_owner)
@@ -193,6 +195,11 @@ class Handover:
         return handover
 
     def _require_current_request(self, handover: HandoverRequest) -> None:
+        if (
+            handover.request_id not in self.requests
+            or self.requests[handover.request_id] is not handover
+        ):
+            raise HandoverValidationError("unknown handover request")
         if handover.current_owner != self._ownership.owner_id:
             raise HandoverValidationError(
                 "handover request does not belong to the current owner"
@@ -202,6 +209,14 @@ class Handover:
                 "ownership must be transfer_pending for an active handover, got "
                 f"{self._ownership.state.value}"
             )
+
+    @staticmethod
+    def _precheck_transition(handover: HandoverRequest, target: HandoverStage) -> None:
+        """Dry-run the request transition so paired ownership/request updates
+        stay atomic: both transitions are pure in-memory state changes, so
+        validating both preconditions before mutating either leaves no
+        divergence window."""
+        assert_valid_handover_transition(handover.stage, target)
 
     def approve(self, handover: HandoverRequest, *, approver: str) -> None:
         self._require_current_request(handover)
@@ -218,8 +233,9 @@ class Handover:
         self, handover: HandoverRequest, *, actor: str = "owner", reason: str = ""
     ) -> None:
         self._require_current_request(handover)
-        handover.reject(actor, reason=reason)
+        self._precheck_transition(handover, HandoverStage.REJECTED)
         self._ownership.cancel_transfer()
+        handover.reject(actor, reason=reason)
         self.events.publish(
             Event.create(
                 type=EventType.HANDOVER_REJECTED,
@@ -232,8 +248,9 @@ class Handover:
         self, handover: HandoverRequest, *, actor: str = "owner", reason: str = ""
     ) -> None:
         self._require_current_request(handover)
-        handover.cancel(actor, reason=reason)
+        self._precheck_transition(handover, HandoverStage.CANCELLED)
         self._ownership.cancel_transfer()
+        handover.cancel(actor, reason=reason)
         self.events.publish(
             Event.create(
                 type=EventType.HANDOVER_CANCELLED,
@@ -250,8 +267,9 @@ class Handover:
             raise HandoverTransitionError(handover.stage, HandoverStage.COMPLETED)
 
         self._require_current_request(handover)
-        handover.complete(actor)
+        self._precheck_transition(handover, HandoverStage.COMPLETED)
         new_ownership = self._ownership.complete_transfer()
+        handover.complete(actor)
         self.events.publish(
             Event.create(
                 type=EventType.HANDOVER_COMPLETED,

@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import Any
 
 from .. import __version__ as _package_version
 
@@ -92,10 +92,10 @@ class TIVISSConfig:
         if self.agent.agent_id is not None and not self.agent.agent_id.strip():
             errors.append("agent.agent_id must be a non-empty string when provided")
 
-        if self.model.provider_id not in {"mock", "local"}:
+        if self.model.provider_id not in {"mock"}:
             errors.append(
-                "model.provider_id must be one of 'mock', 'local'; got "
-                f"{self.model.provider_id!r}"
+                "model.provider_id must be 'mock' (only implemented provider); "
+                f"got {self.model.provider_id!r}"
             )
         if not self.model.model_id.strip():
             errors.append("model.model_id must be a non-empty string")
@@ -134,17 +134,18 @@ class TIVISSConfig:
             raise ConfigValidationError("; ".join(errors))
 
     def to_dict(self) -> dict[str, Any]:
+        """Return a detached snapshot; mutating it never affects config."""
         return {
-            "agent": self.agent.__dict__,
-            "model": self.model.__dict__,
-            "memory": self.memory.__dict__,
+            "agent": dict(self.agent.__dict__),
+            "model": dict(self.model.__dict__),
+            "memory": dict(self.memory.__dict__),
             "permissions": {
                 "allow": list(self.permissions.allow),
                 "deny": list(self.permissions.deny),
             },
-            "runtime": self.runtime.__dict__,
-            "core": self.core.__dict__,
-            "rescs": self.rescs.__dict__,
+            "runtime": dict(self.runtime.__dict__),
+            "core": dict(self.core.__dict__),
+            "rescs": dict(self.rescs.__dict__),
         }
 
     # --- building agents -------------------------------------------------
@@ -186,21 +187,14 @@ class TIVISSConfig:
 
     # --- loading ---------------------------------------------------------
 
-    _ENV_MAP: ClassVar[dict[str, tuple[str, ...]]] = {
-        "agent_id": ("TIVISS_AGENT_ID",),
-        "name": ("TIVISS_AGENT_NAME",),
-        "version": ("TIVISS_AGENT_VERSION",),
-        "owner_id": ("TIVISS_OWNER_ID",),
-        "model_id": ("TIVISS_MODEL_ID",),
-        "prefix": ("TIVISS_MODEL_PREFIX",),
-        "backend": ("TIVISS_MEMORY_BACKEND",),
-        "storage_path": ("TIVISS_MEMORY_STORAGE_PATH",),
-        "allow": ("TIVISS_PERMISSION_ALLOW",),
-        "deny": ("TIVISS_PERMISSION_DENY",),
-        "runtime_enabled": ("TIVISS_RUNTIME_ENABLED",),
-        "core_enabled": ("TIVISS_CORE_ENABLED",),
-        "rescs_enabled": ("TIVISS_RESCS_ENABLED",),
-    }
+    @staticmethod
+    def _to_bool(raw: Any, default: bool) -> bool:
+        """Parse booleans the same way for mappings and environment."""
+        if isinstance(raw, bool):
+            return raw
+        if raw is None:
+            return default
+        return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
     @classmethod
     def load(cls, data: Mapping[str, Any]) -> TIVISSConfig:
@@ -238,13 +232,15 @@ class TIVISSConfig:
             deny=[str(p) for p in (permissions.get("deny") or [])],
         )
         config.runtime = RuntimeSettings(
-            enabled=bool(runtime.get("enabled", config.runtime.enabled))
+            enabled=cls._to_bool(runtime.get("enabled"), config.runtime.enabled)
         )
         config.core = CoreSettings(
-            enabled=bool(core.get("enabled", False)), endpoint=core.get("endpoint")
+            enabled=cls._to_bool(core.get("enabled"), False),
+            endpoint=core.get("endpoint"),
         )
         config.rescs = RescsSettings(
-            enabled=bool(rescs.get("enabled", False)), endpoint=rescs.get("endpoint")
+            enabled=cls._to_bool(rescs.get("enabled"), False),
+            endpoint=rescs.get("endpoint"),
         )
         config.assert_valid()
         return config

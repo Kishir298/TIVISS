@@ -73,10 +73,16 @@ class MockProvider(ModelProvider):
         context = dict(context or {})
         echoed = content.strip()
         if "wordlimit" in context:
+            raw_limit = context["wordlimit"]
+            if isinstance(raw_limit, bool) or not isinstance(raw_limit, (int, str)):
+                raise ProviderError("invalid wordlimit in context")
             try:
-                echoed = " ".join(echoed.split()[: int(context["wordlimit"])])
-            except ValueError:
+                limit = int(raw_limit)
+            except (TypeError, ValueError):
                 raise ProviderError("invalid wordlimit in context") from None
+            if limit < 0:
+                raise ProviderError("invalid wordlimit in context")
+            echoed = " ".join(echoed.split()[:limit])
 
         return ModelResponse(
             content=f"{self._prefix}({self.model_id}): {echoed}",

@@ -17,6 +17,17 @@ ENV/
 .env.*
 !.env.example
 
+# TLS / device material (never commit even if dropped here by tooling)
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+*.cer
+.risarms-device.json
+*-device.json
+device.json
+
 *.log
 
 .DS_Store

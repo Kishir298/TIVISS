@@ -63,8 +63,13 @@ implemented yet.
 | C.O.R.E. integration adapter (local/mock) | **IMPLEMENTED** |
 | R.E.S.C.S. integration adapter (local/mock) | **IMPLEMENTED** |
 | Cross-component integration tests | **IMPLEMENTED** |
-| Real C.O.R.E. transport | IN DEVELOPMENT / PLANNED |
-| Real R.E.S.C.S. transport | IN DEVELOPMENT / PLANNED |
+| Real C.O.R.E. transport (`core_tcp`, TCP+TLS) | **IMPLEMENTED** (tested offline vs fakes) |
+| Real R.E.S.C.S. transport (`rescs_http`, urllib) | **IMPLEMENTED** (tested offline vs fakes) |
+| Interactive CLI (`tiviss` REPL + `--message`) | **IMPLEMENTED** |
+| State export/import (versioned, secret-free) | **IMPLEMENTED** |
+| Structured JSON-lines logging | **IMPLEMENTED** |
+| Voice abstraction + mocks | **IMPLEMENTED** |
+| Provider/request timeouts | **IMPLEMENTED** |
 | A.S.I.S. integration | PLANNED |
 | External-device control | PLANNED / FUTURE |
 | Handover to a real person | FUTURE |
@@ -123,7 +128,9 @@ Future ecosystem integration (later phases):
 12. C.O.R.E. adapter -- **done**
 13. R.E.S.C.S. adapter -- **done**
 14. Cross-component integration tests -- **done**
-15. Documentation + cleanup + release -- **done**
+15. Interactive CLI + state export/import + logging + voice -- **done**
+16. Real C.O.R.E./R.E.S.C.S. transports (offline-tested) -- **done**
+17. Documentation + cleanup + release -- **done**
 
 ## Testing
 
@@ -134,6 +141,25 @@ python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-dev.txt
 .venv\Scripts\python -m pytest
 ```
+
+## Usage
+
+```text
+.venv\Scripts\python -m tiviss --help
+.venv\Scripts\python -m tiviss --message "hello"
+.venv\Scripts\python -m tiviss          # interactive REPL (tiviss> )
+```
+
+The REPL drives the real pipeline (permissions → provider → memory).
+`/help`, `/status`, `/clear`, `/quit` are built in.
+
+## Storage domains
+
+TIVISS cloud data lives under `tiviss.*` RESCS namespaces
+(`tiviss.memory`, `tiviss.conversations`, ...); see
+`../RESCS/docs/storage-domains.md`. The HTTP client refuses other
+namespaces unless explicitly allowed. `asis.*` and `personal.*` are
+never touched.
 
 ## Future integrations
 

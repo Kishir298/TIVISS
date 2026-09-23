@@ -111,6 +111,10 @@ class LocalRESCSAdapter(RESCSAdapter):
         request = IntegrationRequest(
             operation="put", payload={"record_id": record.record_id}, source="tiviss"
         )
+        # Check failure/connection BEFORE mutating the backend so a failed
+        # or disconnected adapter never stores data it reports as failed.
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         stored = self._backend.store(record)
@@ -124,6 +128,8 @@ class LocalRESCSAdapter(RESCSAdapter):
         request = IntegrationRequest(
             operation="get", payload={"record_id": record_id}, source="tiviss"
         )
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         try:
@@ -138,6 +144,8 @@ class LocalRESCSAdapter(RESCSAdapter):
         request = IntegrationRequest(
             operation="search", payload={"query": query}, source="tiviss"
         )
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         result = self._backend.search(query)
@@ -153,6 +161,8 @@ class LocalRESCSAdapter(RESCSAdapter):
 
     def clear(self) -> IntegrationResponse:
         request = IntegrationRequest(operation="clear", payload={}, source="tiviss")
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         self._backend.clear()

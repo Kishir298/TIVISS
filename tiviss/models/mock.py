@@ -12,6 +12,19 @@ from typing import Any
 from .provider import ModelProvider, ModelResponse, ProviderError, ProviderInfo
 
 
+def _to_bool(raw: Any, default: bool = False) -> bool:
+    """Strict bool parse (mirrors config._to_bool): bool passthrough,
+    None -> default, else string in {"1","true","yes","on"}.
+
+    Avoids the ``bool("false") is True`` pitfall.
+    """
+    if isinstance(raw, bool):
+        return raw
+    if raw is None:
+        return default
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _validate_timeout(timeout_s: float | None) -> None:
     """Validate ``timeout_s``; raise :class:`ProviderError` when invalid."""
     if timeout_s is None:
@@ -47,7 +60,7 @@ class MockProvider(ModelProvider):
         self._model_id = model_id
         self._version = version
         self._prefix = prefix
-        self._failure_mode = failure_mode
+        self._failure_mode = _to_bool(failure_mode, False)
 
     @property
     def provider_id(self) -> str:
@@ -70,7 +83,7 @@ class MockProvider(ModelProvider):
 
     def configure(self, config: Mapping[str, Any]) -> None:
         if "failure_mode" in config:
-            self._failure_mode = bool(config["failure_mode"])
+            self._failure_mode = _to_bool(config["failure_mode"], self._failure_mode)
         if "prefix" in config:
             self._prefix = str(config["prefix"])
         if "model_id" in config:

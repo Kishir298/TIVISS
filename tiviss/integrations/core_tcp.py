@@ -13,10 +13,12 @@ This module re-implements the wire contract; it never imports C.O.R.E.
 from __future__ import annotations
 
 import json
+import math
 import socket
 import ssl
 import struct
 import uuid
+import warnings
 from collections.abc import Mapping
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -29,6 +31,27 @@ MAX_FRAME_SIZE = 10 * 1024 * 1024
 
 class DeviceClientError(RuntimeError):
     """Transport or protocol failure talking to C.O.R.E."""
+
+
+def _validate_timeout_s(value: Any, *, field: str = "timeout_s") -> float:
+    """Validate a timeout: finite number > 0 (rejects bool/inf/nan)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise DeviceClientError(f"{field} must be a positive number of seconds")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise DeviceClientError(
+            f"{field} must be a positive number of seconds"
+        ) from None
+    if not math.isfinite(number) or number <= 0:
+        raise DeviceClientError(f"{field} must be a positive number of seconds")
+    return number
+
+
+def _validate_endpoint_str(value: Any, *, field: str) -> str:
+    if not (isinstance(value, str) and value.strip()):
+        raise DeviceClientError(f"{field} must be a non-empty string")
+    return value.strip()
 
 
 def _new_message(
@@ -95,12 +118,7 @@ class CoreTcpClient:
             raise DeviceClientError("device_id must be a non-empty string")
         if not (isinstance(credential, str) and credential):
             raise DeviceClientError("credential must be a non-empty string")
-        if timeout_s is not None and (
-            isinstance(timeout_s, bool)
-            or not isinstance(timeout_s, (int, float))
-            or not timeout_s > 0
-        ):
-            raise DeviceClientError("timeout_s must be a positive number of seconds")
+        validated_timeout = _validate_timeout_s(timeout_s, field="timeout_s")
         self.host = host
         self.port = int(port)
         self.device_id = device_id.strip()
@@ -109,7 +127,7 @@ class CoreTcpClient:
         self._credential = credential
         self.use_tls = bool(use_tls)
         self.ca_file = ca_file
-        self.timeout_s = float(timeout_s) if timeout_s is not None else 10.0
+        self.timeout_s = validated_timeout
         self._sock: socket.socket | None = None
         self._session_token: str | None = None
         self._connection_id: str | None = None
@@ -179,12 +197,25 @@ class CoreTcpClient:
         except AttributeError:
             context.options |= ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
         # Hostname check stays off for self-signed LAN certs (CN=localhost);
-        # chain verification via ca_file is still the trust root.
+        # chain verification via ca_file is still the trust root. Falling back
+        # to system CAs is a MITM risk on hostile networks: warn loudly so
+        # operators pin ca_file in production.
         context.check_hostname = False
         context.verify_mode = ssl.CERT_REQUIRED
         if self.ca_file is not None:
+            import os
+
+            if not os.path.isfile(self.ca_file):
+                raise DeviceClientError(f"ca_file not found: {self.ca_file}")
             context.load_verify_locations(cafile=self.ca_file)
         else:
+            warnings.warn(
+                "CoreTcpClient: no ca_file configured; falling back to system "
+                "CAs with check_hostname=False (MITM risk). Provide ca_file "
+                "pinning the C.O.R.E. host certificate in production.",
+                UserWarning,
+                stacklevel=2,
+            )
             with suppress(ssl.SSLError):
                 context.load_default_certs()
         return context
@@ -282,7 +313,14 @@ class CoreTcpClient:
         """Send one request and wait for the correlated response."""
         if self._sock is None or not self._registered:
             raise DeviceClientError("register before sending requests")
-        wait = self.timeout_s if timeout_s is None else float(timeout_s)
+        destination = _validate_endpoint_str(destination, field="destination")
+        message_type = _validate_endpoint_str(message_type, field="message_type")
+        if payload is not None and not isinstance(payload, Mapping):
+            raise DeviceClientError("payload must be a mapping or None")
+        if timeout_s is None:
+            wait = self.timeout_s
+        else:
+            wait = _validate_timeout_s(timeout_s, field="timeout_s")
         message = _new_message(
             source=self.identity_id,
             destination=destination,

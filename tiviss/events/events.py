@@ -96,11 +96,18 @@ class EventBus:
     """
 
     def __init__(
-        self, *, handler_error: Callable[[Event, Exception], None] | None = None
+        self, *, handler_error: Callable[[Event, Exception], None] | None = None,
+        max_events: int | None = 10000,
     ) -> None:
+        if max_events is not None:
+            if isinstance(max_events, bool) or not isinstance(max_events, int):
+                raise TypeError("max_events must be a positive int or None")
+            if max_events <= 0:
+                raise ValueError("max_events must be positive")
         self._all_handlers: list[EventSubscriber] = []
         self._typed_handlers: dict[EventType, list[EventSubscriber]] = {}
         self._handler_error = handler_error
+        self.max_events = max_events
         self.published: list[Event] = []
         self.errors: list[tuple[Event, Exception]] = []
 
@@ -139,6 +146,10 @@ class EventBus:
     def publish(self, event: Event) -> Event:
         """Dispatch an event synchronously to all matching handlers."""
         self.published.append(event)
+        # Bound retained history so a long-lived bus cannot grow without
+        # limit (default 10k; oldest events are dropped first).
+        if self.max_events is not None and len(self.published) > self.max_events:
+            del self.published[: len(self.published) - self.max_events]
         handlers = list(self._all_handlers) + list(
             self._typed_handlers.get(event.type, [])
         )

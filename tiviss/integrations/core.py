@@ -114,6 +114,10 @@ class LocalCOREAdapter(COREAdapter):
             payload={"agent_id": identity.agent_id},
             source=identity.agent_id,
         )
+        # Check failure/connection BEFORE mutating local state so failure
+        # mode never records agents it reports as failed.
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         self.registered.append(identity)
@@ -129,6 +133,8 @@ class LocalCOREAdapter(COREAdapter):
             payload=dict(status),
             source=status.get("agent_id", "unknown"),
         )
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         self.health_reports.append(dict(status))
@@ -140,6 +146,8 @@ class LocalCOREAdapter(COREAdapter):
             payload={"event_type": event.type.value, "event_id": event.event_id},
             source=event.source,
         )
+        if self._failure_mode:
+            return self._response(request, ok=True, payload={})
         if not self.connected():
             return self._unavailable(request)
         self.events_published.append(event)
@@ -151,6 +159,8 @@ class LocalCOREAdapter(COREAdapter):
             payload={"content": request.content},
             source=request.source,
         )
+        if self._failure_mode:
+            return self._response(transport, ok=True, payload={})
         if not self.connected():
             return self._unavailable(transport)
         self.requests.append(request)

@@ -110,6 +110,11 @@ class HandoverRequest:
     def approve(self, approver: str) -> None:
         if not (isinstance(approver, str) and approver.strip()):
             raise HandoverValidationError("approver must be a non-empty string")
+        # N14: only the current owner may approve a handover.
+        if approver.strip() != self.current_owner:
+            raise HandoverValidationError(
+                "approver must be the current owner of the handover request"
+            )
         self._transition(HandoverStage.APPROVED)
         self.approver = approver
         self._audit(approver, "approved")
@@ -181,23 +186,39 @@ class Handover:
         if problems:
             raise HandoverValidationError("; ".join(problems))
 
+        # Atomic: insert the request BEFORE mutating ownership so a failure
+        # in begin_transfer never leaves ownership TRANSFER_PENDING with no
+        # tracked request. Roll back the insert on any failure.
+        self.requests[handover.request_id] = handover
         try:
             self._ownership.begin_transfer(target_owner)
         except OwnershipTransitionError as exc:
+            self.requests.pop(handover.request_id, None)
             raise HandoverValidationError(str(exc)) from exc
+        except Exception:
+            self.requests.pop(handover.request_id, None)
+            raise
 
-        self.requests[handover.request_id] = handover
-        self.events.publish(
-            Event.create(
-                type=EventType.HANDOVER_REQUESTED,
-                source="handover",
-                payload={
-                    "request_id": handover.request_id,
-                    "current_owner": handover.current_owner,
-                    "target_owner": handover.target_owner,
-                },
+        try:
+            self.events.publish(
+                Event.create(
+                    type=EventType.HANDOVER_REQUESTED,
+                    source="handover",
+                    payload={
+                        "request_id": handover.request_id,
+                        "current_owner": handover.current_owner,
+                        "target_owner": handover.target_owner,
+                    },
+                )
             )
-        )
+        except Exception:
+            # Roll back both sides if event emission fails.
+            from contextlib import suppress as _suppress
+
+            with _suppress(Exception):
+                self._ownership.cancel_transfer()
+            self.requests.pop(handover.request_id, None)
+            raise
         return handover
 
     def _require_current_request(self, handover: HandoverRequest) -> None:
@@ -234,6 +255,14 @@ class Handover:
 
     def approve(self, handover: HandoverRequest, *, approver: str) -> None:
         self._require_current_request(handover)
+        if not (isinstance(approver, str) and approver.strip()):
+            raise HandoverValidationError("approver must be a non-empty string")
+        # N14: only the current owner may approve; prevents a target (or
+        # third party) from self-approving a transfer.
+        if approver.strip() != handover.current_owner:
+            raise HandoverValidationError(
+                "approver must be the current owner of the handover request"
+            )
         handover.approve(approver)
         self.events.publish(
             Event.create(

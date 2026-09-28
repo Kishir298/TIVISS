@@ -5,6 +5,6 @@ It owns its identity, ownership model, agent runtime, memory interface, model
 abstraction, permissions, tools, events, and handover architecture.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["__version__"]

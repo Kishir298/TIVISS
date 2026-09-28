@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tiviss"
-version = "0.1.0"
+version = "0.2.0"
 description = "Though I'm Vanquished, I'm Still Stronger - an independent AI agent of the R.I.S.A.R.M.S. ecosystem"
 readme = "README.md"
 requires-python = ">=3.11"

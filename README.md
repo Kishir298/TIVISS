@@ -11,7 +11,7 @@ person. Because of that, it is architected around an independent identity,
 configuration, memory, permission model, ownership model, and lifecycle --
 with a controlled handover mechanism at its core.
 
-Current implementation status: **foundation phase (v0.1.0)**.
+Current implementation status: **v0.2.0 — foundation + CLI, export/import, logging, voice, timeouts, offline-tested transports**.
 
 ## Why is it separate from A.S.I.S.?
 

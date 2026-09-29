@@ -2,6 +2,7 @@
 
 from .interface import MemoryBackend, MemoryKeyError, MemoryRecord, MemorySearchResult
 from .local import LocalMemory
+from .sqlite import SQLiteMemoryStore
 
 __all__ = [
     "MemoryBackend",
@@ -9,4 +10,5 @@ __all__ = [
     "MemoryRecord",
     "MemorySearchResult",
     "LocalMemory",
+    "SQLiteMemoryStore",
 ]

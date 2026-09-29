@@ -1,6 +1,7 @@
-"""Model provider abstraction: interface, exceptions, and deterministic mock."""
+"""Model provider abstraction: interface, exceptions, deterministic mock, and Ollama."""
 
 from .mock import MockProvider
+from .ollama import OllamaProvider
 from .provider import ModelProvider, ModelResponse, ProviderError, ProviderInfo
 
 __all__ = [
@@ -9,4 +10,5 @@ __all__ = [
     "ProviderError",
     "ProviderInfo",
     "MockProvider",
+    "OllamaProvider",
 ]

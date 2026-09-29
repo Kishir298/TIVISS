@@ -58,7 +58,9 @@ class LocalMemory(MemoryBackend):
         record = self._records[record_id]
         updated = record.with_content(
             record.content if content is None else content,
-            metadata=record.metadata if metadata is None else copy.deepcopy(dict(metadata)),
+            metadata=(
+                record.metadata if metadata is None else copy.deepcopy(dict(metadata))
+            ),
         )
         self._records[record_id] = copy.deepcopy(updated)
         self._persist()

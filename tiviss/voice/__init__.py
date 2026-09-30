@@ -1,38 +1,43 @@
-"""Replaceable voice abstraction for T.I.V.I.S.S.
+from .providers import AudioFrame, SpeechInput, SpeechOutput, Transcriber, Transcript, Vocalizer, VoiceError
+from .mock import MockSpeechInput, MockSpeechOutput, MockTranscriber, MockVocalizer
+from .pipeline import VoicePipeline, ListenResult, SpeakResult, StatusResult, build_voice_pipeline
 
-Voice input, processing, and output are separated so the core reasoning
-loop never depends on audio hardware or ML libraries. The runtime ships
-with deterministic mocks; real engines implement the same ABCs.
-"""
-
-from .mock import (
-    MockSpeechInput,
-    MockSpeechOutput,
-    MockTranscriber,
-    MockVocalizer,
-)
-from .pipeline import voice_turn
-from .providers import (
-    AudioFrame,
-    SpeechInput,
-    SpeechOutput,
-    Transcriber,
-    Transcript,
-    Vocalizer,
-    VoiceError,
-)
+def voice_turn(
+    agent,
+    *, 
+    speech_input: "SpeechInput",
+    transcriber: "Transcriber",
+    vocalizer: "Vocalizer",
+    speech_output: "SpeechOutput",
+    max_turns: int = 10
+) -> str:
+    """Run a single voice interaction turn."""
+    for _ in range(max_turns):
+        frame = speech_input.listen()
+        transcript = transcriber.transcribe(frame)
+        if not transcript.text:
+            raise VoiceError("empty transcription")
+        reply = agent(transcript.text, source="voice")
+        audio = vocalizer.vocalize(reply.content)
+        speech_output.play(audio)
+        return reply.content
 
 __all__ = [
     "AudioFrame",
     "SpeechInput",
     "SpeechOutput",
-    "Transcript",
     "Transcriber",
+    "Transcript",
     "Vocalizer",
     "VoiceError",
     "MockSpeechInput",
     "MockSpeechOutput",
     "MockTranscriber",
     "MockVocalizer",
+    "VoicePipeline",
+    "ListenResult",
+    "SpeakResult",
+    "StatusResult",
+    "build_voice_pipeline",
     "voice_turn",
 ]

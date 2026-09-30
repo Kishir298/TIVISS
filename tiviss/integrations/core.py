@@ -177,3 +177,22 @@ class LocalCOREAdapter(COREAdapter):
     def from_config(cls, config: CoreSettings) -> LocalCOREAdapter:
         """Build a local adapter from C.O.R.E. integration settings."""
         return cls(failure_mode=not config.enabled)
+
+
+import json
+
+MAX_RESULT_CHARS = 8_000
+
+
+def normalize_result(data: Any, max_chars: int = MAX_RESULT_CHARS) -> Any:
+    """Redact then bound the size of a host response for model consumption."""
+    from .base import redact
+    cleaned = redact(data)
+    try:
+        text = json.dumps(cleaned, default=str)
+    except Exception:
+        text = str(cleaned)
+    if len(text) <= max_chars:
+        return cleaned
+    truncated = text[:max_chars]
+    return {"truncated": True, "max_chars": max_chars, "preview": truncated}

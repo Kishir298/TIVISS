@@ -20,6 +20,36 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+REDACTED_KEYS = frozenset(
+    {
+        "token",
+        "credential",
+        "password",
+        "api_token",
+        "session",
+        "session_token",
+        "_session_token",
+        "connection_id",
+        "authenticated",
+    }
+)
+
+REDACTED = "***REDACTED***"
+
+
+def redact(value: Any) -> Any:
+    """Recursively replace secret-bearing keys with a placeholder."""
+    if isinstance(value, dict):
+        return {
+            key: (REDACTED if key in REDACTED_KEYS else redact(item))
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        cleaned = [redact(item) for item in value]
+        return type(value)(cleaned) if isinstance(value, tuple) else cleaned
+    return value
+
+
 class IntegrationStatus(StrEnum):
     OK = "ok"
     ERROR = "error"

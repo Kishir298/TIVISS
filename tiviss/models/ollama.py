@@ -204,7 +204,7 @@ class OllamaProvider(ModelProvider):
         # Parse response
         message = response_data.get("message", {})
         content = message.get("content", "")
-        tool_calls = message.get("tool_calls")
+        _ = message.get("tool_calls")
 
         # Strip thinking tags for qwen3-class models
         if self._strip_thinking and content:

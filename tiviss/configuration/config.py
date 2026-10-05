@@ -59,6 +59,8 @@ class WebSettings:
     timeout: int = 10
     max_results: int = 5
     max_chars: int = 8000
+    max_query_length: int = 500
+    max_url_length: int = 2048
 
 
 @dataclass
@@ -87,6 +89,7 @@ class TranslationSettings:
 
 @dataclass
 class VoiceSettings:
+    enabled: bool = False
     sample_rate: int = 16000
     channels: int = 1
     block_size: int = 1024
@@ -234,6 +237,10 @@ class TIVISSConfig:
             "runtime": dict(self.runtime.__dict__),
             "core": dict(self.core.__dict__),
             "rescs": dict(self.rescs.__dict__),
+            "web": dict(self.web.__dict__),
+            "calculator": dict(self.calculator.__dict__),
+            "translation": dict(self.translation.__dict__),
+            "voice": dict(self.voice.__dict__),
         }
 
     # --- building agents -------------------------------------------------
@@ -304,6 +311,30 @@ class TIVISSConfig:
         return str(raw).strip().lower() in {"1", "true", "yes", "on"}
 
     @classmethod
+    def _to_float(cls, raw: Any, default: float, field_name: str) -> float:
+        """Parse float with validation."""
+        if raw is None:
+            return default
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        try:
+            return float(str(raw).strip())
+        except ValueError:
+            raise ConfigValidationError(f"{field_name} must be a valid number, got {raw!r}")
+
+    @classmethod
+    def _to_int(cls, raw: Any, default: int, field_name: str) -> int:
+        """Parse int with validation."""
+        if raw is None:
+            return default
+        if isinstance(raw, int):
+            return raw
+        try:
+            return int(str(raw).strip())
+        except ValueError:
+            raise ConfigValidationError(f"{field_name} must be a valid integer, got {raw!r}")
+
+    @classmethod
     def load(cls, data: Mapping[str, Any]) -> TIVISSConfig:
         """Load from a mapping, then normalise and validate."""
         config = cls.defaults()
@@ -332,9 +363,9 @@ class TIVISSConfig:
             model_id=str(model.get("model_id", config.model.model_id)),
             prefix=str(model.get("prefix", config.model.prefix)),
             endpoint=str(model.get("endpoint", config.model.endpoint)),
-            timeout_s=float(model.get("timeout_s", config.model.timeout_s)),
-            temperature=float(model.get("temperature", config.model.temperature)),
-            num_predict=int(model.get("num_predict", config.model.num_predict)),
+            timeout_s=cls._to_float(model.get("timeout_s"), config.model.timeout_s, "model.timeout_s"),
+            temperature=cls._to_float(model.get("temperature"), config.model.temperature, "model.temperature"),
+            num_predict=cls._to_int(model.get("num_predict"), config.model.num_predict, "model.num_predict"),
             keep_alive=str(model.get("keep_alive", config.model.keep_alive)),
             strip_thinking=cls._to_bool(model.get("strip_thinking"), config.model.strip_thinking),
         )
@@ -368,16 +399,18 @@ class TIVISSConfig:
         config.web = WebSettings(
             enabled=cls._to_bool(web.get("enabled"), config.web.enabled),
             search_provider=str(web.get("search_provider", config.web.search_provider)),
-            timeout=int(web.get("timeout", config.web.timeout)),
-            max_results=int(web.get("max_results", config.web.max_results)),
-            max_chars=int(web.get("max_chars", config.web.max_chars)),
+            timeout=cls._to_int(web.get("timeout"), config.web.timeout, "web.timeout"),
+            max_results=cls._to_int(web.get("max_results"), config.web.max_results, "web.max_results"),
+            max_chars=cls._to_int(web.get("max_chars"), config.web.max_chars, "web.max_chars"),
+            max_query_length=cls._to_int(web.get("max_query_length"), config.web.max_query_length, "web.max_query_length"),
+            max_url_length=cls._to_int(web.get("max_url_length"), config.web.max_url_length, "web.max_url_length"),
         )
         config.calculator = CalculatorSettings(
             enabled=cls._to_bool(calculator.get("enabled"), config.calculator.enabled),
-            max_expression_chars=int(calculator.get("max_expression_chars", config.calculator.max_expression_chars)),
-            max_matrix_size=int(calculator.get("max_matrix_size", config.calculator.max_matrix_size)),
-            timeout=int(calculator.get("timeout", config.calculator.timeout)),
-            precision=int(calculator.get("precision", config.calculator.precision)),
+            max_expression_chars=cls._to_int(calculator.get("max_expression_chars"), config.calculator.max_expression_chars, "calculator.max_expression_chars"),
+            max_matrix_size=cls._to_int(calculator.get("max_matrix_size"), config.calculator.max_matrix_size, "calculator.max_matrix_size"),
+            timeout=cls._to_int(calculator.get("timeout"), config.calculator.timeout, "calculator.timeout"),
+            precision=cls._to_int(calculator.get("precision"), config.calculator.precision, "calculator.precision"),
             angle_mode=str(calculator.get("angle_mode", config.calculator.angle_mode)),
         )
         config.translation = TranslationSettings(
@@ -387,15 +420,16 @@ class TIVISSConfig:
             model_path=str(translation.get("model_path", config.translation.model_path)),
             device=str(translation.get("device", config.translation.device)),
             cache_enabled=cls._to_bool(translation.get("cache_enabled"), config.translation.cache_enabled),
-            cache_size=int(translation.get("cache_size", config.translation.cache_size)),
+            cache_size=cls._to_int(translation.get("cache_size"), config.translation.cache_size, "translation.cache_size"),
             default_source=str(translation.get("default_source", config.translation.default_source)),
             default_target=str(translation.get("default_target", config.translation.default_target)),
-            max_chars=int(translation.get("max_chars", config.translation.max_chars)),
+            max_chars=cls._to_int(translation.get("max_chars"), config.translation.max_chars, "translation.max_chars"),
         )
         config.voice = VoiceSettings(
-            sample_rate=int(voice.get("sample_rate", config.voice.sample_rate)),
-            channels=int(voice.get("channels", config.voice.channels)),
-            block_size=int(voice.get("block_size", config.voice.block_size)),
+            enabled=cls._to_bool(voice.get("enabled"), config.voice.enabled),
+            sample_rate=cls._to_int(voice.get("sample_rate"), config.voice.sample_rate, "voice.sample_rate"),
+            channels=cls._to_int(voice.get("channels"), config.voice.channels, "voice.channels"),
+            block_size=cls._to_int(voice.get("block_size"), config.voice.block_size, "voice.block_size"),
             stt_engine=str(voice.get("stt_engine", config.voice.stt_engine)),
             stt_model=str(voice.get("stt_model", config.voice.stt_model)),
             stt_device=str(voice.get("stt_device", config.voice.stt_device)),
@@ -403,20 +437,20 @@ class TIVISSConfig:
             stt_language=str(voice.get("stt_language", config.voice.stt_language)),
             tts_engine=str(voice.get("tts_engine", config.voice.tts_engine)),
             tts_voice=str(voice.get("tts_voice", config.voice.tts_voice)),
-            tts_sample_rate=int(voice.get("tts_sample_rate", config.voice.tts_sample_rate)),
+            tts_sample_rate=cls._to_int(voice.get("tts_sample_rate"), config.voice.tts_sample_rate, "voice.tts_sample_rate"),
             speaker_engine=str(voice.get("speaker_engine", config.voice.speaker_engine)),
             speaker_model=str(voice.get("speaker_model", config.voice.speaker_model)),
             speaker_device=str(voice.get("speaker_device", config.voice.speaker_device)),
-            speaker_confidence=float(voice.get("speaker_confidence", config.voice.speaker_confidence)),
-            speaker_threshold=float(voice.get("speaker_threshold", config.voice.speaker_threshold)),
+            speaker_confidence=cls._to_float(voice.get("speaker_confidence"), config.voice.speaker_confidence, "voice.speaker_confidence"),
+            speaker_threshold=cls._to_float(voice.get("speaker_threshold"), config.voice.speaker_threshold, "voice.speaker_threshold"),
             speaker_metric=str(voice.get("speaker_metric", config.voice.speaker_metric)),
             wake_engine=str(voice.get("wake_engine", config.voice.wake_engine)),
-            wake_threshold=float(voice.get("wake_threshold", config.voice.wake_threshold)),
+            wake_threshold=cls._to_float(voice.get("wake_threshold"), config.voice.wake_threshold, "voice.wake_threshold"),
             wake_model=str(voice.get("wake_model", config.voice.wake_model)),
             vad_engine=str(voice.get("vad_engine", config.voice.vad_engine)),
-            vad_threshold=float(voice.get("vad_threshold", config.voice.vad_threshold)),
-            max_utterance_s=float(voice.get("max_utterance_s", config.voice.max_utterance_s)),
-            silence_s=float(voice.get("silence_s", config.voice.silence_s)),
+            vad_threshold=cls._to_float(voice.get("vad_threshold"), config.voice.vad_threshold, "voice.vad_threshold"),
+            max_utterance_s=cls._to_float(voice.get("max_utterance_s"), config.voice.max_utterance_s, "voice.max_utterance_s"),
+            silence_s=cls._to_float(voice.get("silence_s"), config.voice.silence_s, "voice.silence_s"),
         )
         config.assert_valid()
         return config
@@ -500,6 +534,10 @@ class TIVISSConfig:
         # Web settings
         if web_enabled := _get("TIVISS_WEB_ENABLED"):
             config.web.enabled = web_enabled.strip().lower() in {"1", "true", "yes", "on"}
+        if max_query := _get("TIVISS_WEB_MAX_QUERY_LENGTH"):
+            config.web.max_query_length = int(max_query)
+        if max_url := _get("TIVISS_WEB_MAX_URL_LENGTH"):
+            config.web.max_url_length = int(max_url)
         # Calculator settings
         if calc_enabled := _get("TIVISS_CALCULATOR_ENABLED"):
             config.calculator.enabled = calc_enabled.strip().lower() in {"1", "true", "yes", "on"}

@@ -56,12 +56,12 @@ class WebSearchTool(Tool):
             raise ToolError("WEB_DISABLED: web access is disabled by configuration.")
         query = params.get("query", "")
         if not isinstance(query, str) or not query.strip():
-            raise ToolError(""query"" must be a non-empty string.")
+            raise ToolError("query must be a non-empty string.")
         if len(query.strip()) > web.max_query_length:
-            raise ToolError(""query"" exceeds the maximum permitted length.")
+            raise ToolError("query exceeds the maximum permitted length.")
         raw_count = params.get("max_results", web.max_results)
         if isinstance(raw_count, bool) or not isinstance(raw_count, int):
-            raise ToolError(""max_results"" must be an integer.")
+            raise ToolError("max_results must be an integer.")
         count = max(1, min(raw_count, web.max_results))
         return {"query": query.strip(), "count": count}
 
@@ -76,7 +76,7 @@ class WebSearchTool(Tool):
                 return ToolResult(
                     tool_id=self.tool_id,
                     status=ToolStatus.FAILED,
-                    error=f"{code}: {message.split(": ", 1)[-1]}" if ": " in message else f"{code}: {message}",
+                    error=f"{code}: {message.split(': ', 1)[-1]}" if ": " in message else f"{code}: {message}",
                 )
             return ToolResult(
                 tool_id=self.tool_id,
@@ -87,8 +87,9 @@ class WebSearchTool(Tool):
         return ToolResult(
             tool_id=self.tool_id,
             status=ToolStatus.OK,
-            data={"query": validated["query"], "results": bounded},
+            output={"query": validated["query"], "results": bounded},
         )
+
 
 class WebFetchTool(Tool):
     """Fetch readable content from a public HTTP/HTTPS page."""
@@ -125,20 +126,20 @@ class WebFetchTool(Tool):
             raise ToolError("WEB_DISABLED: web access is disabled by configuration.")
         url = params.get("url", "")
         if not isinstance(url, str) or not url.strip():
-            raise ToolError(""url"" must be a non-empty string.")
+            raise ToolError("url must be a non-empty string.")
         if len(url.strip()) > web.max_url_length:
-            raise ToolError(""url"" exceeds the maximum permitted length.")
+            raise ToolError("url exceeds the maximum permitted length.")
         from urllib.parse import urlparse as _urlparse
 
         _parsed = _urlparse(url.strip())
         _scheme = (_parsed.scheme or "").lower()
         if _scheme not in ("http", "https"):
             if not _scheme or not _parsed.hostname:
-                raise ToolError("WEB_INVALID_URL: ""url"" must be a valid http(s) URL.")
+                raise ToolError("WEB_INVALID_URL: url must be a valid http(s) URL.")
             raise ToolError("WEB_UNSUPPORTED_SCHEME: only http and https URLs are permitted.")
         raw_chars = params.get("max_chars", web.max_chars)
         if isinstance(raw_chars, bool) or not isinstance(raw_chars, int):
-            raise ToolError(""max_chars"" must be an integer.")
+            raise ToolError("max_chars must be an integer.")
         max_chars = max(1, min(raw_chars, web.max_chars))
         return {"url": url.strip(), "max_chars": max_chars}
 
@@ -153,7 +154,7 @@ class WebFetchTool(Tool):
                 return ToolResult(
                     tool_id=self.tool_id,
                     status=ToolStatus.FAILED,
-                    error=f"{code}: {message.split(": ", 1)[-1]}" if ": " in message else f"{code}: {message}",
+                    error=f"{code}: {message.split(': ', 1)[-1]}" if ": " in message else f"{code}: {message}",
                 )
             return ToolResult(
                 tool_id=self.tool_id,
@@ -163,7 +164,12 @@ class WebFetchTool(Tool):
         return ToolResult(
             tool_id=self.tool_id,
             status=ToolStatus.OK,
-            data=validated,
+            output={
+                "url": data.url,
+                "title": data.title,
+                "content": data.content,
+                "metadata": data.metadata,
+            },
         )
 
 

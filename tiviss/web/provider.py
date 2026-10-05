@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional, List, Iterator
+from typing import Any, List
 from ..configuration import settings as tiviss_settings
-from ..errors import ErrorCode, TivissError
+from ..errors import TivissError
 
 
 def _web_settings():

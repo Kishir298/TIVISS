@@ -32,22 +32,41 @@ def _looks_secret(name: str) -> bool:
     return any(hint in lowered for hint in _SECRET_HINTS)
 
 
-def _scrub_mapping(data: Mapping[str, Any], *, prefix: str = "") -> tuple[dict, list]:
-    """Return (cleaned_dict, dropped_paths) with secret keys removed."""
-    cleaned: dict[str, Any] = {}
+def _scrub_value(value: Any, *, prefix: str = "") -> tuple[Any, list]:
+    """Recursively scrub secrets from any value (mappings, sequences, scalars).
+
+    Returns (cleaned_value, dropped_paths).
+    """
     dropped: list[str] = []
-    for key, value in dict(data).items():
-        path = f"{prefix}.{key}" if prefix else str(key)
-        if _looks_secret(str(key)):
-            dropped.append(path)
-            continue
-        if isinstance(value, Mapping):
-            nested, nested_dropped = _scrub_mapping(value, prefix=path)
-            cleaned[key] = nested
+
+    if isinstance(value, Mapping):
+        cleaned: dict[str, Any] = {}
+        for key, val in dict(value).items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if _looks_secret(str(key)):
+                dropped.append(path)
+                continue
+            cleaned_val, nested_dropped = _scrub_value(val, prefix=path)
+            cleaned[key] = cleaned_val
             dropped.extend(nested_dropped)
-        else:
-            cleaned[key] = value
-    return cleaned, dropped
+        return cleaned, dropped
+
+    elif isinstance(value, (list, tuple, set)):
+        cleaned_list = []
+        for idx, item in enumerate(value):
+            path = f"{prefix}[{idx}]" if prefix else f"[{idx}]"
+            cleaned_item, item_dropped = _scrub_value(item, prefix=path)
+            cleaned_list.append(cleaned_item)
+            dropped.extend(item_dropped)
+        # Preserve original type (list/tuple/set)
+        if isinstance(value, tuple):
+            return tuple(cleaned_list), dropped
+        elif isinstance(value, set):
+            return set(cleaned_list), dropped
+        return cleaned_list, dropped
+
+    else:
+        return value, dropped
 
 
 def _dt(value: datetime) -> str:
@@ -88,7 +107,7 @@ class ExportedState:
 
 
 def _identity_to_dict(identity: AgentIdentity) -> tuple[dict, list]:
-    meta, dropped = _scrub_mapping(identity.meta, prefix="identity.meta")
+    meta, dropped = _scrub_value(identity.meta, prefix="identity.meta")
     return (
         {
             "agent_id": identity.agent_id,
@@ -129,7 +148,7 @@ def _memory_to_list(records) -> tuple[list, list]:
             data = record.to_dict()
         except AttributeError:
             continue
-        meta, meta_dropped = _scrub_mapping(
+        meta, meta_dropped = _scrub_value(
             data.get("metadata") or {}, prefix=f"memory.{record.key}"
         )
         data["metadata"] = meta
@@ -152,6 +171,11 @@ def export_state(
     identity_dict, dropped = _identity_to_dict(identity)
     memory_list, memory_dropped = _memory_to_list(memory_records)
     dropped.extend(memory_dropped)
+
+    # Scrub model configuration
+    model_dict, model_dropped = _scrub_value(dict(model), prefix="model")
+    dropped.extend(model_dropped)
+
     handover_list = []
     for request in handover_requests:
         handover_list.append(
@@ -169,7 +193,7 @@ def export_state(
     payload = {
         "identity": identity_dict,
         "ownership": _ownership_to_dict(ownership),
-        "model": dict(model),
+        "model": model_dict,
         "permissions": {
             "allow": sorted(permissions.get("allow", ())),
             "deny": sorted(permissions.get("deny", ())),

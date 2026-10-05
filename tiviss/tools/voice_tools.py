@@ -56,7 +56,7 @@ class VoiceListenTool(Tool):
             raise ToolError("VOICE_DISABLED: voice is disabled by configuration.")
         timeout = params.get("timeout", voice.max_utterance_s)
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise ToolError(""timeout"" must be a number.")
+            raise ToolError("timeout must be a number.")
         return {"timeout": max(1, min(timeout, voice.max_utterance_s))}
 
     def execute(self, params: dict[str, Any]) -> ToolResult:
@@ -70,7 +70,7 @@ class VoiceListenTool(Tool):
                 return ToolResult(
                     tool_id=self.tool_id,
                     status=ToolStatus.FAILED,
-                    error=f"{code}: {message.split(": ", 1)[-1]}" if ": " in message else f"{code}: {message}",
+                    error=f"{code}: {message.split(': ', 1)[-1]}" if ": " in message else f"{code}: {message}",
                 )
             return ToolResult(
                 tool_id=self.tool_id,
@@ -82,6 +82,7 @@ class VoiceListenTool(Tool):
             status=ToolStatus.OK,
             data={"transcription": result.text, "confidence": result.confidence, "duration": result.duration},
         )
+
 
 class VoiceSpeakTool(Tool):
     """Speak text using TTS."""
@@ -118,7 +119,7 @@ class VoiceSpeakTool(Tool):
             raise ToolError("VOICE_DISABLED: voice is disabled by configuration.")
         text = params.get("text", "")
         if not isinstance(text, str) or not text.strip():
-            raise ToolError(""text"" must be a non-empty string.")
+            raise ToolError("text must be a non-empty string.")
         return {"text": text.strip()}
 
     def execute(self, params: dict[str, Any]) -> ToolResult:
@@ -132,7 +133,7 @@ class VoiceSpeakTool(Tool):
                 return ToolResult(
                     tool_id=self.tool_id,
                     status=ToolStatus.FAILED,
-                    error=f"{code}: {message.split(": ", 1)[-1]}" if ": " in message else f"{code}: {message}",
+                    error=f"{code}: {message.split(': ', 1)[-1]}" if ": " in message else f"{code}: {message}",
                 )
             return ToolResult(
                 tool_id=self.tool_id,
@@ -182,7 +183,7 @@ class VoiceStatusTool(Tool):
         return {}
 
     def execute(self, params: dict[str, Any]) -> ToolResult:
-        validated = self.validate_input(params)
+        self.validate_input(params)
         try:
             result = self._client().status()
         except Exception as exc:
@@ -192,7 +193,7 @@ class VoiceStatusTool(Tool):
                 return ToolResult(
                     tool_id=self.tool_id,
                     status=ToolStatus.FAILED,
-                    error=f"{code}: {message.split(": ", 1)[-1]}" if ": " in message else f"{code}: {message}",
+                    error=f"{code}: {message.split(': ', 1)[-1]}" if ": " in message else f"{code}: {message}",
                 )
             return ToolResult(
                 tool_id=self.tool_id,

@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..integrations.core import COREAdapter
 from ..integrations.core import normalize_result
 from ..permissions.permissions import Permission
-from .interface import Tool, ToolError, ToolResult, ToolStatus
+from .interface import Tool, ToolResult, ToolStatus
 
 
 def _core_of(tool: CoreToolBase) -> Any:

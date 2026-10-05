@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .interface import MemoryRecord, MemorySearchResult
+from .interface import MemoryRecord, MemorySearchResult, MemoryKeyError
 
 
 @dataclass
@@ -44,6 +44,49 @@ class SemanticMemoryEntry:
     metadata: dict[str, Any]
     created_at: float
     updated_at: float
+
+
+def _now_dt() -> datetime:
+    """Return current timezone-aware datetime."""
+    return datetime.now(UTC)
+
+
+def _dt_to_float(dt: datetime) -> float:
+    """Convert datetime to float timestamp."""
+    return dt.timestamp()
+
+
+def _float_to_dt(ts: float) -> datetime:
+    """Convert float timestamp to timezone-aware datetime."""
+    return datetime.fromtimestamp(ts, UTC)
+
+
+def _extract_metadata_cols(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """Extract structured metadata columns from metadata dict."""
+    return {
+        "category": metadata.get("category", "general"),
+        "memory_type": metadata.get("memory_type", "fact"),
+        "importance": metadata.get("importance", 5),
+        "confidence": metadata.get("confidence", 0.7),
+        "source": metadata.get("source", "user-stated"),
+        "evidence": metadata.get("evidence", ""),
+    }
+
+
+def _build_metadata_json(metadata: Mapping[str, Any]) -> str:
+    """Build metadata JSON excluding structured columns."""
+    excluded = {"category", "memory_type", "importance", "confidence", "source", "evidence"}
+    return json.dumps({k: v for k, v in metadata.items() if k not in excluded})
+
+
+def _merge_metadata(json_str: str, cols: dict[str, Any]) -> dict[str, Any]:
+    """Merge metadata JSON with structured columns, JSON takes precedence."""
+    metadata = json.loads(json_str) if json_str else {}
+    # Start with column values as defaults
+    result = dict(cols)
+    # Override with JSON values (which are newer if update() was called)
+    result.update(metadata)
+    return result
 
 
 class SQLiteMemoryStore:
@@ -89,11 +132,12 @@ class SQLiteMemoryStore:
             """)
 
     def _init_semantic_db(self) -> None:
-        """Initialize the semantic memory database."""
+        """Initialize the semantic memory database with migration support."""
         with sqlite3.connect(self.semantic_db) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS semantic_memory (
                     record_id TEXT PRIMARY KEY,
+                    key TEXT NOT NULL,
                     content TEXT NOT NULL,
                     category TEXT NOT NULL,
                     memory_type TEXT NOT NULL,
@@ -106,6 +150,15 @@ class SQLiteMemoryStore:
                     updated_at REAL NOT NULL
                 )
             """)
+            
+            # Migration: add key column if missing (for older databases)
+            cursor = conn.execute("PRAGMA table_info(semantic_memory)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "key" not in columns:
+                conn.execute("ALTER TABLE semantic_memory ADD COLUMN key TEXT NOT NULL DEFAULT ''")
+                # Backfill key with record_id for existing records
+                conn.execute("UPDATE semantic_memory SET key = record_id WHERE key = ''")
+            
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_semantic_category
                 ON semantic_memory(category)
@@ -122,6 +175,10 @@ class SQLiteMemoryStore:
                 CREATE INDEX IF NOT EXISTS idx_semantic_created_at
                 ON semantic_memory(created_at)
             """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_semantic_key
+                ON semantic_memory(key)
+            """)
 
     # --- Conversation Log Methods ---
 
@@ -134,7 +191,7 @@ class SQLiteMemoryStore:
     ) -> int:
         """Append a conversation exchange to the log."""
         metadata = metadata or {}
-        created_at = time.time()
+        created_at = _now_dt()
         with sqlite3.connect(self.conversation_db) as conn:
             cursor = conn.execute(
                 """
@@ -142,7 +199,7 @@ class SQLiteMemoryStore:
                 (request_id, request_content, response_content, metadata, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (request_id, request_content, response_content, json.dumps(metadata), created_at),
+                (request_id, request_content, response_content, json.dumps(metadata), _dt_to_float(created_at)),
             )
             return cursor.lastrowid
 
@@ -169,7 +226,7 @@ class SQLiteMemoryStore:
                 request_content=row["request_content"],
                 response_content=row["response_content"],
                 metadata=json.loads(row["metadata"]),
-                created_at=row["created_at"],
+                created_at=_float_to_dt(row["created_at"]),
             )
             for row in rows
         ]
@@ -200,7 +257,7 @@ class SQLiteMemoryStore:
                 request_content=row["request_content"],
                 response_content=row["response_content"],
                 metadata=json.loads(row["metadata"]),
-                created_at=row["created_at"],
+                created_at=_float_to_dt(row["created_at"]),
             )
             for row in rows
         ]
@@ -209,34 +266,34 @@ class SQLiteMemoryStore:
 
     def store(self, record: MemoryRecord) -> MemoryRecord:
         """Store a memory record in semantic memory."""
-        now = time.time()
-        if record.record_id in ("", None):
-            record_id = str(uuid.uuid4())
-        else:
-            record_id = record.record_id
+        now = _now_dt()
+        record_id = record.record_id if record.record_id else str(uuid.uuid4())
+        
+        # Extract structured columns from metadata
+        meta_cols = _extract_metadata_cols(record.metadata)
+        metadata_json = _build_metadata_json(record.metadata)
 
         with sqlite3.connect(self.semantic_db) as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO semantic_memory
-                (record_id, content, category, memory_type, importance, confidence,
+                (record_id, key, content, category, memory_type, importance, confidence,
                  source, evidence, metadata, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record_id,
+                    record.key,
                     record.content,
-                    record.metadata.get("category", "general"),
-                    record.metadata.get("memory_type", "fact"),
-                    record.metadata.get("importance", 5),
-                    record.metadata.get("confidence", 0.7),
-                    record.metadata.get("source", "user-stated"),
-                    record.metadata.get("evidence", ""),
-                    json.dumps({k: v for k, v in record.metadata.items()
-                                if k not in {"category", "memory_type", "importance",
-                                             "confidence", "source", "evidence"}}),
-                    record.metadata.get("created_at", now),
-                    now,
+                    meta_cols["category"],
+                    meta_cols["memory_type"],
+                    meta_cols["importance"],
+                    meta_cols["confidence"],
+                    meta_cols["source"],
+                    meta_cols["evidence"],
+                    metadata_json,
+                    _dt_to_float(record.created_at),
+                    _dt_to_float(now),
                 ),
             )
         return MemoryRecord(
@@ -244,11 +301,11 @@ class SQLiteMemoryStore:
             content=record.content,
             record_id=record_id,
             metadata={**record.metadata, "record_id": record_id},
-            created_at=record.metadata.get("created_at", now),
+            created_at=record.created_at,
             updated_at=now,
         )
 
-    def retrieve(self, record_id: str) -> MemoryRecord | None:
+    def retrieve(self, record_id: str) -> MemoryRecord:
         """Retrieve a memory record by ID."""
         with sqlite3.connect(self.semantic_db) as conn:
             conn.row_factory = sqlite3.Row
@@ -257,25 +314,24 @@ class SQLiteMemoryStore:
                 (record_id,),
             ).fetchone()
         if not row:
-            return None
-        metadata = json.loads(row["metadata"])
-        metadata.update({
+            raise MemoryKeyError(record_id)
+        
+        metadata = _merge_metadata(row["metadata"], {
             "category": row["category"],
             "memory_type": row["memory_type"],
             "importance": row["importance"],
             "confidence": row["confidence"],
             "source": row["source"],
             "evidence": row["evidence"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
         })
+        
         return MemoryRecord(
-            key=row["record_id"],
+            key=row["key"],
             content=row["content"],
             record_id=row["record_id"],
             metadata=metadata,
-            created_at=row["created_at"],
-            updated_at=row["updated_at"],
+            created_at=_float_to_dt(row["created_at"]),
+            updated_at=_float_to_dt(row["updated_at"]),
         )
 
     def update(
@@ -286,28 +342,49 @@ class SQLiteMemoryStore:
     ) -> bool:
         """Update a memory record."""
         with sqlite3.connect(self.semantic_db) as conn:
+            conn.row_factory = sqlite3.Row
             # Get existing
             row = conn.execute(
-                "SELECT content, metadata FROM semantic_memory WHERE record_id = ?",
+                "SELECT content, metadata, category, memory_type, importance, confidence, source, evidence FROM semantic_memory WHERE record_id = ?",
                 (record_id,),
             ).fetchone()
             if not row:
                 return False
 
-            old_content, old_metadata = row
-            new_content = content if content is not None else old_content
-            new_metadata = dict(json.loads(old_metadata))
+            old_content = row["content"]
+            old_metadata = json.loads(row["metadata"]) if row["metadata"] else {}
+            
+            # Merge old metadata with new metadata
+            new_metadata = dict(old_metadata)
             if metadata:
                 new_metadata.update(metadata)
+            
+            # Extract structured columns from merged metadata
+            meta_cols = _extract_metadata_cols(new_metadata)
+            metadata_json = _build_metadata_json(new_metadata)
+            
+            new_content = content if content is not None else old_content
+            now = _now_dt()
 
-            now = time.time()
             conn.execute(
                 """
                 UPDATE semantic_memory
-                SET content = ?, metadata = ?, updated_at = ?
+                SET content = ?, category = ?, memory_type = ?, importance = ?,
+                    confidence = ?, source = ?, evidence = ?, metadata = ?, updated_at = ?
                 WHERE record_id = ?
                 """,
-                (new_content, json.dumps(new_metadata), now, record_id),
+                (
+                    new_content,
+                    meta_cols["category"],
+                    meta_cols["memory_type"],
+                    meta_cols["importance"],
+                    meta_cols["confidence"],
+                    meta_cols["source"],
+                    meta_cols["evidence"],
+                    metadata_json,
+                    _dt_to_float(now),
+                    record_id,
+                ),
             )
             return True
 
@@ -330,8 +407,8 @@ class SQLiteMemoryStore:
     ) -> MemorySearchResult:
         """Search semantic memory with optional filters."""
         search_term = f"%{query}%"
-        params: list[Any] = [search_term, search_term, search_term]
-        where_clauses = ["(content LIKE ? OR category LIKE ? OR memory_type LIKE ?)"]
+        params: list[Any] = [search_term, search_term, search_term, search_term]
+        where_clauses = ["(content LIKE ? OR category LIKE ? OR memory_type LIKE ? OR key LIKE ?)"]
 
         if category:
             where_clauses.append("category = ?")
@@ -360,25 +437,22 @@ class SQLiteMemoryStore:
 
         records = []
         for row in rows:
-            metadata = json.loads(row["metadata"])
-            metadata.update({
+            metadata = _merge_metadata(row["metadata"], {
                 "category": row["category"],
                 "memory_type": row["memory_type"],
                 "importance": row["importance"],
                 "confidence": row["confidence"],
                 "source": row["source"],
                 "evidence": row["evidence"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
             })
             records.append(
                 MemoryRecord(
-                    key=row["record_id"],
+                    key=row["key"],
                     content=row["content"],
                     record_id=row["record_id"],
                     metadata=metadata,
-                    created_at=row["created_at"],
-                    updated_at=row["updated_at"],
+                    created_at=_float_to_dt(row["created_at"]),
+                    updated_at=_float_to_dt(row["updated_at"]),
                 )
             )
 

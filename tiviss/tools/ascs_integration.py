@@ -10,12 +10,12 @@ import os
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from ..permissions.permissions import Permission
-from .interface import Tool, ToolError, ToolResult, ToolStatus
+from .interface import Tool, ToolResult, ToolStatus
 
 
 @dataclass
@@ -31,36 +31,29 @@ class AscsHandoverState:
     workspace: str = ""
     timestamp: str = ""
 
-from dataclasses import field
 
 class AscsIntegrationTool(Tool):
     """Execute coding tasks via A.S.C.S. with optional handover."""
 
-    metadata = type("Metadata", (), {
-        "name": "ascs_integration",
-        "description": "Execute coding tasks via A.S.C.S. (A Smart Coding System). Supports subprocess and API invocation modes with handover support.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "integration", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {"type": "string", "description": "The coding task to execute"},
-                "mode": {"type": "string", "enum": ["PLAN", "BUILD", "AUTO"], "default": "AUTO"},
-                "intelligence": {"type": "string", "enum": ["low", "medium", "high", "xhigh"], "default": "high"},
-                "workspace": {"type": "string", "description": "Repository/workspace path"},
-                "invoke_mode": {"type": "string", "enum": ["subprocess", "api"], "default": "subprocess"},
-                "model": {"type": "string", "description": "Ollama model to use"},
-                "max_iterations": {"type": "integer", "default": 50},
-                "enable_handover": {"type": "boolean", "default": true},
-            },
-            "required": ["task"],
-        },
-    })()
-
     def __init__(self, settings=None) -> None:
         self._settings = settings
         self._session_manager = None
+
+    @property
+    def tool_id(self) -> str:
+        return "ascs_integration"
+
+    @property
+    def name(self) -> str:
+        return "ASCSIntegration"
+
+    @property
+    def description(self) -> str:
+        return "Execute coding tasks via A.S.C.S. (A Smart Coding System). Supports subprocess and API invocation modes with handover support."
+
+    @property
+    def permission(self) -> Permission:
+        return Permission.of("tools.coding")
 
     def _get_settings(self):
         if self._settings is not None:
@@ -111,7 +104,7 @@ class AscsIntegrationTool(Tool):
 
         return cmd
 
-    def _execute_subprocess(self, cmd: list[str], workspace: str) -> tuple[int, str, str]:
+    def _execute_subprocess(self, cmd: list[str], workspace: str, settings) -> tuple[int, str, str]:
         """Execute risa command via subprocess."""
 
         env = os.environ.copy()
@@ -143,7 +136,6 @@ class AscsIntegrationTool(Tool):
             from agent.config import load_config
             from agent.core.loop import run_graph_agent
             from agent.models.client import OllamaClient
-            from agent.workspace import Workspace
 
             config = load_config(
                 workspace=args.get("workspace", settings.ascs.workspace),
@@ -182,7 +174,7 @@ class AscsIntegrationTool(Tool):
 
         if not settings.ascs.enabled:
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
                 error="ASCS integration is disabled. Set ASIS_ASCS_ENABLED=true to enable.",
             )
@@ -191,7 +183,7 @@ class AscsIntegrationTool(Tool):
         task = kwargs.get("task", "")
         if not isinstance(task, str) or not task.strip():
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
                 error="task must be a non-empty string.",
             )
@@ -199,7 +191,7 @@ class AscsIntegrationTool(Tool):
         invoke_mode = kwargs.get("invoke_mode", settings.ascs.invoke_mode)
         if invoke_mode not in ("subprocess", "api"):
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
                 error="invoke_mode must be 'subprocess' or 'api'.",
             )
@@ -216,7 +208,7 @@ class AscsIntegrationTool(Tool):
         workspace = cmd_args["workspace"]
         if not Path(workspace).exists():
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
                 error=f"Workspace does not exist: {workspace}",
             )
@@ -225,7 +217,7 @@ class AscsIntegrationTool(Tool):
 
         if invoke_mode == "subprocess":
             cmd = self._build_subprocess_cmd(cmd_args, settings)
-            returncode, stdout, stderr = self._execute_subprocess(cmd, workspace)
+            returncode, stdout, stderr = self._execute_subprocess(cmd, workspace, settings)
         else:
             returncode, stdout, stderr = self._execute_api(cmd_args, settings)
 
@@ -248,13 +240,13 @@ class AscsIntegrationTool(Tool):
             returncode=returncode,
             stdout=stdout,
             stderr=stderr,
-            elapsed=elapsed,
+            elapsed_seconds=elapsed,
             handover_state=handover_state,
         )
 
         if returncode == 0:
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.OK,
                 data={
                     "task": task,
@@ -269,7 +261,7 @@ class AscsIntegrationTool(Tool):
             )
         else:
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
                 error=f"ASCS execution failed (exit {returncode}): {stderr[:500]}",
             )
@@ -300,42 +292,50 @@ class AscsIntegrationTool(Tool):
             return None
 
 
-
 class AscsHandoverTool(Tool):
     """Receive and process ASCS handover state for TIVISS continuation."""
 
-    metadata = type("Metadata", (), {
-        "name": "ascs_handover",
-        "description": "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "handover_state": {"type": "object", "description": "ASCS handover state object"},
-                "continue_in_tiviss": {"type": "boolean", "default": true},
-            },
-            "required": ["handover_state"],
-        },
-    })()
+    def __init__(self, settings=None) -> None:
+        self._settings = settings
+
+    @property
+    def tool_id(self) -> str:
+        return "ascs_handover"
+
+    @property
+    def name(self) -> str:
+        return "ASCSHandover"
+
+    @property
+    def description(self) -> str:
+        return "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags."
+
+    @property
+    def permission(self) -> Permission:
+        return Permission.of("tools.coding")
+
+    def _get_settings(self):
+        if self._settings is not None:
+            return self._settings
+        from ..configuration import settings as tiviss_settings
+        return tiviss_settings
 
     def execute(self, **kwargs: Any) -> ToolResult:
         handover_data = kwargs.get("handover_state")
         if not handover_data or not isinstance(handover_data, dict):
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
-                error="handover_state"" must be a valid object.",
+                error="handover_state must be a valid object.",
             )
 
         required = ["task", "workspace", "context_index_ref", "completed_actions", "observations"]
-        for field in required:
-            if field not in handover_data:
+        for field_name in required:
+            if field_name not in handover_data:
                 return ToolResult(
-                    tool_id=self.metadata.name,
+                    tool_id=self.tool_id,
                     status=ToolStatus.FAILED,
-                    error="Missing required field in handover_state: {field}",
+                    error=f"Missing required field in handover_state: {field_name}",
                 )
 
         context_index_path = handover_data.get("context_index_ref")
@@ -359,13 +359,13 @@ class AscsHandoverTool(Tool):
         }
 
         msg = (
-            "Received handover from ASCS for task: " + handover_data["task"][:100] + 
-            ". Completed " + str(len(handover_data["completed_actions"])) + 
+            "Received handover from ASCS for task: " + handover_data["task"][:100] +
+            ". Completed " + str(len(handover_data["completed_actions"])) +
             " actions. TIVISS can now continue with full context."
         )
 
         return ToolResult(
-            tool_id=self.metadata.name,
+            tool_id=self.tool_id,
             status=ToolStatus.OK,
             data={
                 "continuation_context": continuation_context,
@@ -383,429 +383,7 @@ class AscsHandoverTool(Tool):
         symbols = context_data.get("symbols", {})
 
         key_files = list(files.keys())[:10]
-        return (
-            "Context index: " + str(len(files)) + " files indexed, " +
-
-class AscsHandoverTool(Tool):
-    """Receive and process ASCS handover state for TIVISS continuation."""
-
-    metadata = type("Metadata", (), {
-        "name": "ascs_handover",
-        "description": "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "handover_state": {"type": "object", "description": "ASCS handover state object"},
-                "continue_in_tiviss": {"type": "boolean", "default": true},
-            },
-            "required": ["handover_state"],
-        },
-    })()
-
-    def execute(self, **kwargs: Any) -> ToolResult:
-        handover_data = kwargs.get("handover_state")
-        if not handover_data or not isinstance(handover_data, dict):
-            return ToolResult(
-                tool_id=self.metadata.name,
-                status=ToolStatus.FAILED,
-                error="handover_state"" must be a valid object.",
-            )
-
-        required = ["task", "workspace", "context_index_ref", "completed_actions", "observations"]
-        for field in required:
-            if field not in handover_data:
-                return ToolResult(
-                    tool_id=self.metadata.name,
-                    status=ToolStatus.FAILED,
-                    error="Missing required field in handover_state: {field}",
-                )
-
-        context_index_path = handover_data.get("context_index_ref")
-        context_data = {}
-        if context_index_path and Path(context_index_path).exists():
-            try:
-                with open(context_index_path) as f:
-                    context_data = json.load(f)
-            except Exception:
-                pass
-
-        continuation_context = {
-            "original_task": handover_data["task"],
-            "workspace": handover_data["workspace"],
-            "completed_actions": handover_data["completed_actions"],
-            "observations": handover_data["observations"],
-            "partial_results": handover_data.get("partial_results", {}),
-            "experience_tags": handover_data.get("experience_tags", []),
-            "context_index_summary": self._summarize_context_index(context_data),
-            "timestamp": handover_data.get("timestamp"),
-        }
-
-        msg = (
-            "Received handover from ASCS for task: " + handover_data["task"][:100] + 
-            ". Completed " + str(len(handover_data["completed_actions"])) + 
-            " actions. TIVISS can now continue with full context."
-        )
-
-        return ToolResult(
-            tool_id=self.metadata.name,
-            status=ToolStatus.OK,
-            data={
-                "continuation_context": continuation_context,
-                "message": msg,
-            },
-        )
-
-    def _summarize_context_index(self, context_data: dict) -> str:
-        """Summarize the ASCS context index for TIVISS prompt."""
-
-        if not context_data:
-            return "No context index available."
-
-        files = context_data.get("files", {})
-        symbols = context_data.get("symbols", {})
-
-        key_files = list(files.keys())[:10]
-        return (
-            "Context index: " + str(len(files)) + " files indexed, " +
-
-class AscsHandoverTool(Tool):
-    """Receive and process ASCS handover state for TIVISS continuation."""
-
-    metadata = type("Metadata", (), {
-        "name": "ascs_handover",
-        "description": "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "handover_state": {"type": "object", "description": "ASCS handover state object"},
-                "continue_in_tiviss": {"type": "boolean", "default": true},
-            },
-            "required": ["handover_state"],
-        },
-    })()
-
-    def execute(self, **kwargs: Any) -> ToolResult:
-        handover_data = kwargs.get("handover_state")
-        if not handover_data or not isinstance(handover_data, dict):
-            return ToolResult(
-                tool_id=self.metadata.name,
-                status=ToolStatus.FAILED,
-                error="handover_state"" must be a valid object.",
-            )
-
-        required = ["task", "workspace", "context_index_ref", "completed_actions", "observations"]
-        for field in required:
-            if field not in handover_data:
-                return ToolResult(
-                    tool_id=self.metadata.name,
-                    status=ToolStatus.FAILED,
-                    error="Missing required field in handover_state: {field}",
-                )
-
-        context_index_path = handover_data.get("context_index_ref")
-        context_data = {}
-        if context_index_path and Path(context_index_path).exists():
-            try:
-                with open(context_index_path) as f:
-                    context_data = json.load(f)
-            except Exception:
-                pass
-
-        continuation_context = {
-            "original_task": handover_data["task"],
-            "workspace": handover_data["workspace"],
-            "completed_actions": handover_data["completed_actions"],
-            "observations": handover_data["observations"],
-            "partial_results": handover_data.get("partial_results", {}),
-            "experience_tags": handover_data.get("experience_tags", []),
-            "context_index_summary": self._summarize_context_index(context_data),
-            "timestamp": handover_data.get("timestamp"),
-        }
-
-        msg = (
-            "Received handover from ASCS for task: " + handover_data["task"][:100] + 
-            ". Completed " + str(len(handover_data["completed_actions"])) + 
-            " actions. TIVISS can now continue with full context."
-        )
-
-        return ToolResult(
-            tool_id=self.metadata.name,
-            status=ToolStatus.OK,
-            data={
-                "continuation_context": continuation_context,
-                "message": msg,
-            },
-        )
-
-    def _summarize_context_index(self, context_data: dict) -> str:
-        """Summarize the ASCS context index for TIVISS prompt."""
-
-        if not context_data:
-            return "No context index available."
-
-        files = context_data.get("files", {})
-        symbols = context_data.get("symbols", {})
-
-        key_files = list(files.keys())[:10]
-        return (
-            "Context index: " + str(len(files)) + " files indexed, " +
-            " symbols extracted. " +
-
-class AscsHandoverTool(Tool):
-    """Receive and process ASCS handover state for TIVISS continuation."""
-
-    metadata = type("Metadata", (), {
-        "name": "ascs_handover",
-        "description": "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "handover_state": {"type": "object", "description": "ASCS handover state object"},
-                "continue_in_tiviss": {"type": "boolean", "default": true},
-            },
-            "required": ["handover_state"],
-        },
-    })()
-
-    def execute(self, **kwargs: Any) -> ToolResult:
-        handover_data = kwargs.get("handover_state")
-        if not handover_data or not isinstance(handover_data, dict):
-            return ToolResult(
-                tool_id=self.metadata.name,
-                status=ToolStatus.FAILED,
-                error="handover_state"" must be a valid object.",
-            )
-
-        required = ["task", "workspace", "context_index_ref", "completed_actions", "observations"]
-        for field in required:
-            if field not in handover_data:
-                return ToolResult(
-                    tool_id=self.metadata.name,
-                    status=ToolStatus.FAILED,
-                    error="Missing required field in handover_state: {field}",
-                )
-
-        context_index_path = handover_data.get("context_index_ref")
-        context_data = {}
-        if context_index_path and Path(context_index_path).exists():
-            try:
-                with open(context_index_path) as f:
-                    context_data = json.load(f)
-            except Exception:
-                pass
-
-        continuation_context = {
-            "original_task": handover_data["task"],
-            "workspace": handover_data["workspace"],
-            "completed_actions": handover_data["completed_actions"],
-            "observations": handover_data["observations"],
-            "partial_results": handover_data.get("partial_results", {}),
-            "experience_tags": handover_data.get("experience_tags", []),
-            "context_index_summary": self._summarize_context_index(context_data),
-            "timestamp": handover_data.get("timestamp"),
-        }
-
-        msg = (
-            "Received handover from ASCS for task: " + handover_data["task"][:100] + 
-            ". Completed " + str(len(handover_data["completed_actions"])) + 
-            " actions. TIVISS can now continue with full context."
-        )
-
-        return ToolResult(
-            tool_id=self.metadata.name,
-            status=ToolStatus.OK,
-            data={
-                "continuation_context": continuation_context,
-                "message": msg,
-            },
-        )
-
-    def _summarize_context_index(self, context_data: dict) -> str:
-        """Summarize the ASCS context index for TIVISS prompt."""
-
-        if not context_data:
-            return "No context index available."
-
-        files = context_data.get("files", {})
-        symbols = context_data.get("symbols", {})
-
-        key_files = list(files.keys())[:10]
-
-class AscsHandoverTool(Tool):
-    """Receive and process ASCS handover state for TIVISS continuation."""
-
-    metadata = type("Metadata", (), {
-        "name": "ascs_handover",
-        "description": "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "handover_state": {"type": "object", "description": "ASCS handover state object"},
-                "continue_in_tiviss": {"type": "boolean", "default": true},
-            },
-            "required": ["handover_state"],
-        },
-    })()
-
-    def execute(self, **kwargs: Any) -> ToolResult:
-        handover_data = kwargs.get("handover_state")
-        if not handover_data or not isinstance(handover_data, dict):
-            return ToolResult(
-                tool_id=self.metadata.name,
-                status=ToolStatus.FAILED,
-                error="handover_state"" must be a valid object.",
-            )
-
-        required = ["task", "workspace", "context_index_ref", "completed_actions", "observations"]
-        for field in required:
-            if field not in handover_data:
-                return ToolResult(
-                    tool_id=self.metadata.name,
-                    status=ToolStatus.FAILED,
-                    error="Missing required field in handover_state: {field}",
-                )
-
-        context_index_path = handover_data.get("context_index_ref")
-        context_data = {}
-        if context_index_path and Path(context_index_path).exists():
-            try:
-                with open(context_index_path) as f:
-                    context_data = json.load(f)
-            except Exception:
-                pass
-
-        continuation_context = {
-            "original_task": handover_data["task"],
-            "workspace": handover_data["workspace"],
-            "completed_actions": handover_data["completed_actions"],
-            "observations": handover_data["observations"],
-            "partial_results": handover_data.get("partial_results", {}),
-            "experience_tags": handover_data.get("experience_tags", []),
-            "context_index_summary": self._summarize_context_index(context_data),
-            "timestamp": handover_data.get("timestamp"),
-        }
-
-        msg = (
-            "Received handover from ASCS for task: " + handover_data["task"][:100] + 
-            ". Completed " + str(len(handover_data["completed_actions"])) + 
-            " actions. TIVISS can now continue with full context."
-        )
-
-        return ToolResult(
-            tool_id=self.metadata.name,
-            status=ToolStatus.OK,
-            data={
-                "continuation_context": continuation_context,
-                "message": msg,
-            },
-        )
-
-    def _summarize_context_index(self, context_data: dict) -> str:
-        """Summarize the ASCS context index for TIVISS prompt."""
-
-        if not context_data:
-            return "No context index available."
-
-        files = context_data.get("files", {})
-        symbols = context_data.get("symbols", {})
-
-        key_files = list(files.keys())[:10]
-
-class AscsHandoverTool(Tool):
-    """Receive and process ASCS handover state for TIVISS continuation."""
-
-    metadata = type("Metadata", (), {
-        "name": "ascs_handover",
-        "description": "Receive ASCS handover state and continue the task in TIVISS. Loads task graph, context index, and experience tags.",
-        "category": "coding",
-        "permission": Permission.of("tools.coding"),
-        "tags": ("coding", "ascs", "handover"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "handover_state": {"type": "object", "description": "ASCS handover state object"},
-                "continue_in_tiviss": {"type": "boolean", "default": true},
-            },
-            "required": ["handover_state"],
-        },
-    })()
-
-    def execute(self, **kwargs: Any) -> ToolResult:
-        handover_data = kwargs.get("handover_state")
-        if not handover_data or not isinstance(handover_data, dict):
-            return ToolResult(
-                tool_id=self.metadata.name,
-                status=ToolStatus.FAILED,
-                error="handover_state"" must be a valid object.",
-            )
-
-        required = ["task", "workspace", "context_index_ref", "completed_actions", "observations"]
-        for field in required:
-            if field not in handover_data:
-                return ToolResult(
-                    tool_id=self.metadata.name,
-                    status=ToolStatus.FAILED,
-                    error="Missing required field in handover_state: {field}",
-                )
-
-        context_index_path = handover_data.get("context_index_ref")
-        context_data = {}
-        if context_index_path and Path(context_index_path).exists():
-            try:
-                with open(context_index_path) as f:
-                    context_data = json.load(f)
-            except Exception:
-                pass
-
-        continuation_context = {
-            "original_task": handover_data["task"],
-            "workspace": handover_data["workspace"],
-            "completed_actions": handover_data["completed_actions"],
-            "observations": handover_data["observations"],
-            "partial_results": handover_data.get("partial_results", {}),
-            "experience_tags": handover_data.get("experience_tags", []),
-            "context_index_summary": self._summarize_context_index(context_data),
-            "timestamp": handover_data.get("timestamp"),
-        }
-
-        msg = (
-            "Received handover from ASCS for task: " + handover_data["task"][:100] + 
-            ". Completed " + str(len(handover_data["completed_actions"])) + 
-            " actions. TIVISS can now continue with full context."
-        )
-
-        return ToolResult(
-            tool_id=self.metadata.name,
-            status=ToolStatus.OK,
-            data={
-                "continuation_context": continuation_context,
-                "message": msg,
-            },
-        )
-
-    def _summarize_context_index(self, context_data: dict) -> str:
-        """Summarize the ASCS context index for TIVISS prompt."""
-
-        if not context_data:
-            return "No context index available."
-
-        files = context_data.get("files", {})
-        symbols = context_data.get("symbols", {})
-
-        key_files = list(files.keys())[:10]
-        join_str = comma_space.join(key_files)
+        join_str = ", ".join(key_files)
         return (
             "Context index: " + str(len(files)) + " files indexed, " +
             str(len(symbols)) + " symbols extracted. " +
@@ -816,26 +394,36 @@ class AscsHandoverTool(Tool):
 class AscsStatusTool(Tool):
     """Check A.S.C.S. availability and session status."""
 
-    metadata = type("Metadata", (), {
-        "name": "ascs_status",
-        "description": "Check A.S.C.S. availability, version, and active sessions.",
-        "category": "coding",
-        "permission": Permission.of("tools.safe"),
-        "tags": ("coding", "ascs", "status"),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "check_install": {"type": "boolean", "default": true},
-                "list_sessions": {"type": "boolean", "default": true},
-            },
-        },
-    })()
+    def __init__(self, settings=None) -> None:
+        self._settings = settings
+
+    @property
+    def tool_id(self) -> str:
+        return "ascs_status"
+
+    @property
+    def name(self) -> str:
+        return "ASCSStatus"
+
+    @property
+    def description(self) -> str:
+        return "Check A.S.C.S. availability, version, and active sessions."
+
+    @property
+    def permission(self) -> Permission:
+        return Permission.of("tools.safe")
+
+    def _get_settings(self):
+        if self._settings is not None:
+            return self._settings
+        from ..configuration import settings as tiviss_settings
+        return tiviss_settings
 
     def execute(self, **kwargs: Any) -> ToolResult:
         settings = self._get_settings()
         if not settings.ascs.enabled:
             return ToolResult(
-                tool_id=self.metadata.name,
+                tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
                 error="ASCS integration is disabled.",
             )
@@ -854,7 +442,7 @@ class AscsStatusTool(Tool):
             session_mgr = self._get_session_manager()
             result_data["sessions"] = session_mgr.get_recent_sessions(10)
         return ToolResult(
-            tool_id=self.metadata.name,
+            tool_id=self.tool_id,
             status=ToolStatus.OK,
             data=result_data,
         )
@@ -874,5 +462,5 @@ def register_ascs_tools(registry, settings=None) -> list[str]:
     names: list[str] = []
     for tool in build_ascs_tools(settings):
         registry.register(tool)
-        names.append(tool.metadata.name)
+        names.append(tool.tool_id)
     return names

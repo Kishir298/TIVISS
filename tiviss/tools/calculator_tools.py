@@ -59,8 +59,10 @@ _STRING_ARGS = (
     "vectors",
 )
 
+
 def _calculator_settings():
     return tiviss_settings.calculator
+
 
 class CalculateTool(Tool):
     """Deterministic local mathematics across all engine operations."""
@@ -96,22 +98,22 @@ class CalculateTool(Tool):
 
     def validate_input(self, params: dict[str, Any]) -> dict[str, Any]:
         if "operation" not in params:
-            raise ToolError(""operation"" must be provided")
+            raise ToolError("operation must be provided")
         operation = params.get("operation", "")
         if not isinstance(operation, str) or not operation.strip():
-            raise ToolError(""operation"" must be a non-empty string")
+            raise ToolError("operation must be a non-empty string")
 
         validated: dict[str, Any] = {"operation": operation.strip()}
         for key in _STRING_ARGS:
             if key in params and params[key] not in (None, ""):
                 value = params[key]
                 if not isinstance(value, str):
-                    raise ToolError(f"{key}" must be a string")
+                    raise ToolError(f"{key} must be a string")
                 validated[key] = value
         raw_params = params.get("params")
         if raw_params is not None:
             if not isinstance(raw_params, dict):
-                raise ToolError(""params"" must be an object")
+                raise ToolError("params must be an object")
             for key, value in raw_params.items():
                 validated[str(key)] = value if isinstance(value, str) else str(value)
 
@@ -142,7 +144,7 @@ class CalculateTool(Tool):
             return ToolResult(
                 tool_id=self.tool_id,
                 status=ToolStatus.FAILED,
-                error=""operation"" must be a non-empty string.",
+                error="operation must be a non-empty string.",
             )
 
         validated_params = self.validate_input(params)

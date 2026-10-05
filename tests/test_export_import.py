@@ -104,3 +104,134 @@ def test_import_rejects_invalid(mutate):
 def test_import_rejects_non_mapping():
     with pytest.raises(StateImportError):
         import_state(["not", "a", "mapping"])
+
+
+def test_export_scrubs_model_config_secrets():
+    """Test that model configuration section is scrubbed for secrets."""
+    from tiviss.identity import AgentIdentity, Ownership
+    
+    identity = AgentIdentity.create(name="t", version="1", owner_id="k")
+    ownership = Ownership.create("k")
+    
+    # Model config with api_key
+    model_config = {
+        "provider_id": "ollama",
+        "model_id": "llama3",
+        "api_key": "secret-key-123",
+        "endpoint": "http://localhost:11434",
+        "nested": {"api_key": "nested-secret", "safe": "value"},
+        "list_of_mappings": [
+            {"api_key": "list-secret-1", "data": "ok"},
+            {"token": "list-secret-2", "info": "fine"}
+        ]
+    }
+    
+    doc = export_state(
+        identity=identity,
+        ownership=ownership,
+        model=model_config,
+        permissions={},
+        memory_records=[],
+    )
+    
+    # Check model section is scrubbed
+    model_payload = doc["payload"]["model"]
+    assert "api_key" not in model_payload
+    assert model_payload["provider_id"] == "ollama"
+    assert model_payload["model_id"] == "llama3"
+    assert model_payload["endpoint"] == "http://localhost:11434"
+    
+    # Check nested mapping scrubbed
+    assert "api_key" not in model_payload["nested"]
+    assert model_payload["nested"]["safe"] == "value"
+    
+    # Check list of mappings scrubbed
+    assert "api_key" not in model_payload["list_of_mappings"][0]
+    assert model_payload["list_of_mappings"][0]["data"] == "ok"
+    assert "token" not in model_payload["list_of_mappings"][1]
+    assert model_payload["list_of_mappings"][1]["info"] == "fine"
+    
+    # Check dropped secrets recorded
+    dropped = doc["dropped_secrets"]
+    assert "model.api_key" in dropped
+    assert "model.nested.api_key" in dropped
+    assert "model.list_of_mappings[0].api_key" in dropped
+    assert "model.list_of_mappings[1].token" in dropped
+
+
+def test_export_scrubs_mappings_within_lists():
+    """Test that mappings within lists are recursively scrubbed."""
+    from tiviss.identity import AgentIdentity, Ownership
+    from tiviss.memory.interface import MemoryRecord
+    from tiviss.memory.local import LocalMemory
+    
+    identity = AgentIdentity.create(name="t", version="1", owner_id="k")
+    ownership = Ownership.create("k")
+    memory = LocalMemory()
+    
+    # Memory record with list of mappings containing secrets
+    memory.store(MemoryRecord(
+        key="test",
+        content="content",
+        metadata={
+            "tags": [
+                {"name": "tag1", "api_key": "secret-in-list"},
+                {"name": "tag2", "password": "another-secret"}
+            ],
+            "safe_field": "value"
+        }
+    ))
+    
+    records = memory.search("").records
+    doc = export_state(
+        identity=identity,
+        ownership=ownership,
+        model={},
+        permissions={},
+        memory_records=records,
+    )
+    
+    # Check memory record metadata is scrubbed
+    mem_metadata = doc["payload"]["memory_records"][0]["metadata"]
+    assert "tags" in mem_metadata
+    assert len(mem_metadata["tags"]) == 2
+    assert "api_key" not in mem_metadata["tags"][0]
+    assert mem_metadata["tags"][0]["name"] == "tag1"
+    assert "password" not in mem_metadata["tags"][1]
+    assert mem_metadata["tags"][1]["name"] == "tag2"
+    assert mem_metadata["safe_field"] == "value"
+    
+    # Check dropped secrets
+    dropped = doc["dropped_secrets"]
+    assert "memory.test.tags[0].api_key" in dropped
+    assert "memory.test.tags[1].password" in dropped
+
+
+def test_no_api_key_sentinel_in_serialized_output():
+    """Assert no sentinel api_key appears in serialized JSON output."""
+    from tiviss.identity import AgentIdentity, Ownership
+    import json
+    
+    identity = AgentIdentity.create(
+        name="t", version="1", owner_id="k", 
+        meta={"api_key": "should-not-appear", "normal": "data"}
+    )
+    ownership = Ownership.create("k")
+    
+    doc = export_state(
+        identity=identity,
+        ownership=ownership,
+        model={"api_key": "model-secret", "provider": "test"},
+        permissions={},
+        memory_records=[],
+    )
+    
+    # Serialize to JSON
+    json_str = json.dumps(doc)
+    
+    # The literal string "api_key" should not appear as a key in the JSON
+    # (it should be dropped and only appear in dropped_secrets list)
+    assert '"api_key":' not in json_str
+    # But the dropped_secrets should contain the paths
+    assert "identity.meta.api_key" in doc["dropped_secrets"]
+    assert "model.api_key" in doc["dropped_secrets"]

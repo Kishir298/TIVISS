@@ -16,8 +16,9 @@ from .interface import Tool, ToolError, ToolResult, ToolStatus
 def _translation_settings():
     return tiviss_settings.translation
 
+
 class TranslateTextTool(Tool):
-    """Translate text into a target language. Returns translated 
+    """Translate text into a target language. Returns translated
             text plus language metadata."""
 
     @property
@@ -48,20 +49,20 @@ class TranslateTextTool(Tool):
 
     def validate_input(self, params: dict[str, Any]) -> dict[str, Any]:
         if "text" not in params:
-            raise ToolError(""text"" must be provided")
+            raise ToolError("text must be provided")
         text = params.get("text", "")
         if not isinstance(text, str) or not text.strip():
-            raise ToolError(""text"" must be a non-empty string")
+            raise ToolError("text must be a non-empty string")
         if "target_language" not in params:
-            raise ToolError(""target_language"" must be provided")
+            raise ToolError("target_language must be provided")
         target = params.get("target_language", "")
         if not isinstance(target, str) or not target.strip():
-            raise ToolError(""target_language"" must be a non-empty string")
+            raise ToolError("target_language must be a non-empty string")
         source = params.get("source_language")
         if source is None:
             source = _translation_settings().default_source
         if not isinstance(source, str) or not source.strip():
-            raise ToolError(""source_language"" must be a non-empty string")
+            raise ToolError("source_language must be a non-empty string")
         return {"text": text.strip(), "target_language": target.strip(), "source_language": source.strip()}
 
     def execute(self, params: dict[str, Any]) -> ToolResult:

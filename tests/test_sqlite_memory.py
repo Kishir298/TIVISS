@@ -1,10 +1,13 @@
 """Tests for SQLite memory backend."""
 
-import pytest
+import gc
+import shutil
 import tempfile
 from pathlib import Path
 
-from tiviss.memory import SQLiteMemoryStore, MemoryRecord, MemoryKeyError
+import pytest
+
+from tiviss.memory import MemoryKeyError, MemoryRecord, SQLiteMemoryStore
 
 
 class TestSQLiteMemoryStore:
@@ -13,22 +16,36 @@ class TestSQLiteMemoryStore:
     @pytest.fixture
     def temp_dbs(self):
         """Create temporary database files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            conv_db = Path(tmpdir) / "conversation_logs.db"
-            sem_db = Path(tmpdir) / "semantic_memory.db"
-            yield str(conv_db), str(sem_db)
+        tmpdir = tempfile.mkdtemp()
+        conv_db = Path(tmpdir) / "conversation_logs.db"
+        sem_db = Path(tmpdir) / "semantic_memory.db"
+        yield str(conv_db), str(sem_db)
+        # Force garbage collection to close any remaining connections
+        gc.collect()
+        # Clean up with retry for Windows file locking
+        for _ in range(3):
+            try:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+                break
+            except PermissionError:
+                import time
+                time.sleep(0.1)
 
     @pytest.fixture
     def store(self, temp_dbs):
         """Create a SQLiteMemoryStore instance."""
-        return SQLiteMemoryStore(temp_dbs[0], temp_dbs[1])
+        store = SQLiteMemoryStore(temp_dbs[0], temp_dbs[1])
+        yield store
+        # Explicitly clear to help with connection cleanup
+        del store
+        gc.collect()
 
     def test_store_and_retrieve(self, store):
         """Test storing and retrieving a memory record."""
         record = MemoryRecord(key="greeting", content="hello world")
         stored = store.store(record)
         retrieved = store.retrieve(stored.record_id)
-        
+
         assert retrieved.key == "greeting"
         assert retrieved.content == "hello world"
         assert retrieved.record_id == stored.record_id
@@ -69,11 +86,11 @@ class TestSQLiteMemoryStore:
         store.store(MemoryRecord(key="alpha", content="hello world"))
         store.store(MemoryRecord(key="beta", content="goodbye world"))
         store.store(MemoryRecord(key="gamma", content="nothing"))
-        
+
         result = store.search("world")
         assert result.total == 2
         assert {r.key for r in result.records} == {"alpha", "beta"}
-        
+
         result = store.search("hello")
         assert result.total == 1
         assert result.records[0].key == "alpha"
@@ -82,7 +99,7 @@ class TestSQLiteMemoryStore:
         """Test searching with category filter."""
         store.store(MemoryRecord(key="a1", content="test", metadata={"category": "personal"}))
         store.store(MemoryRecord(key="a2", content="test", metadata={"category": "work"}))
-        
+
         result = store.search("test", category="personal")
         assert result.total == 1
         assert result.records[0].key == "a1"
@@ -92,7 +109,7 @@ class TestSQLiteMemoryStore:
         """Test searching with minimum importance filter."""
         store.store(MemoryRecord(key="low", content="test", metadata={"importance": 1}))
         store.store(MemoryRecord(key="high", content="test", metadata={"importance": 10}))
-        
+
         result = store.search("test", min_importance=5)
         assert result.total == 1
         assert result.records[0].key == "high"
@@ -120,7 +137,7 @@ class TestSQLiteMemoryStore:
         """Test that datetimes are timezone-aware (not floats)."""
         record = store.store(MemoryRecord(key="test", content="content"))
         retrieved = store.retrieve(record.record_id)
-        
+
         # Should be datetime objects with timezone info
         assert retrieved.created_at.tzinfo is not None
         assert retrieved.updated_at.tzinfo is not None
@@ -138,18 +155,18 @@ class TestSQLiteMemoryStore:
     def test_metadata_columns_updated_atomically(self, store):
         """Test that metadata columns (category, importance, source) are updated atomically."""
         record = store.store(MemoryRecord(
-            key="test", 
-            content="content", 
+            key="test",
+            content="content",
             metadata={"category": "old_cat", "importance": 3, "source": "old_src"}
         ))
-        
+
         # Update with new metadata
         store.update(record.record_id, metadata={
             "category": "new_cat",
             "importance": 8,
             "source": "new_src"
         })
-        
+
         retrieved = store.retrieve(record.record_id)
         assert retrieved.metadata.get("category") == "new_cat"
         assert retrieved.metadata.get("importance") == 8
@@ -164,7 +181,7 @@ class TestSQLiteMemoryStore:
             metadata={"session": "test"}
         )
         assert log_id > 0
-        
+
         history = store.get_conversation_history(limit=10)
         assert len(history) == 1
         assert history[0].request_id == "req-1"
@@ -175,25 +192,25 @@ class TestSQLiteMemoryStore:
 
     def test_export_import_roundtrip(self, temp_dbs):
         """Test export/import roundtrip with SQLite backend."""
-        from tiviss.state_io import export_state, import_state, EXPORT_MARKER
-        from tiviss.identity import Ownership
         from tiviss.configuration import TIVISSConfig
-        
+        from tiviss.identity import Ownership
+        from tiviss.state_io import EXPORT_MARKER, export_state, import_state
+
         store = SQLiteMemoryStore(temp_dbs[0], temp_dbs[1])
-        
+
         # Store some records
         store.store(MemoryRecord(key="fact1", content="likes tea", metadata={"category": "preference"}))
         store.store(MemoryRecord(key="fact2", content="dislikes coffee", metadata={"category": "preference"}))
-        
+
         records = store.search("").records
-        
+
         config = TIVISSConfig.load({
             "agent": {"name": "t", "owner_id": "kishir", "agent_id": "a-1"},
             "permissions": {"allow": ["conversation.generate"]},
         })
         identity = config.build_identity()
         ownership = Ownership.create("kishir")
-        
+
         doc = export_state(
             identity=identity,
             ownership=ownership,
@@ -202,11 +219,11 @@ class TestSQLiteMemoryStore:
             memory_records=records,
             counters={"requests_handled": 3},
         )
-        
+
         assert doc[EXPORT_MARKER] is True
         assert doc["version"] == 1
         assert doc["integrity"]
-        
+
         # Import and verify
         restored = import_state(doc)
         assert restored.agent_id == "a-1"
@@ -214,7 +231,7 @@ class TestSQLiteMemoryStore:
         assert restored.ownership.owner_id == "kishir"
         assert len(restored.memory_records) == 2
         assert restored.counters == {"requests_handled": 3}
-        
+
         # Verify memory records have correct keys and content
         keys = {r.key for r in restored.memory_records}
         assert keys == {"fact1", "fact2"}
@@ -224,7 +241,7 @@ class TestSQLiteMemoryStore:
         # Create an old-style database without key column
         import sqlite3
         conv_db, sem_db = temp_dbs
-        
+
         # Create old schema (without key column)
         with sqlite3.connect(sem_db) as conn:
             conn.execute("""
@@ -248,10 +265,10 @@ class TestSQLiteMemoryStore:
                 (record_id, content, category, memory_type, importance, confidence, source, evidence, metadata, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, ("old-record-1", "old content", "general", "fact", 5, 0.7, "user-stated", "", "{}", 1234567890.0, 1234567890.0))
-        
+
         # Now initialize the store - should migrate
         store = SQLiteMemoryStore(conv_db, sem_db)
-        
+
         # Should be able to retrieve the old record
         retrieved = store.retrieve("old-record-1")
         assert retrieved.content == "old content"

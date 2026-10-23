@@ -1,3 +1,6 @@
+import tempfile
+from pathlib import Path
+
 import pytest
 
 from tiviss.configuration import ConfigValidationError, TIVISSConfig
@@ -132,8 +135,9 @@ def test_secrets_not_in_config_surfaces():
     assert "password" not in str(serialized).lower()
 
 
-def test_to_dict_roundtrip_all_sections():
+def test_to_dict_roundtrip_all_sections(tmp_path):
     """Test that to_dict serializes all sections and load() restores them exactly."""
+    temp_dir = tempfile.gettempdir()
     original = TIVISSConfig.load({
         "agent": {
             "name": "roundtrip-agent",
@@ -153,8 +157,8 @@ def test_to_dict_roundtrip_all_sections():
         },
         "memory": {
             "backend": "sqlite",
-            "conversation_db": "/tmp/conv.db",
-            "semantic_db": "/tmp/sem.db"
+            "conversation_db": str(Path(temp_dir) / "conv.db"),
+            "semantic_db": str(Path(temp_dir) / "sem.db")
         },
         "permissions": {
             "allow": ["conversation.generate", "memory.store"],
@@ -220,10 +224,10 @@ def test_to_dict_roundtrip_all_sections():
             "silence_s": 1.0
         },
     })
-    
+
     # Serialize to dict
     serialized = original.to_dict()
-    
+
     # Verify all sections present
     expected_sections = [
         "agent", "model", "memory", "permissions", "runtime",
@@ -231,16 +235,16 @@ def test_to_dict_roundtrip_all_sections():
     ]
     for section in expected_sections:
         assert section in serialized, f"Missing section: {section}"
-    
+
     # Load from serialized dict
     restored = TIVISSConfig.load(serialized)
-    
+
     # Verify roundtrip equality for all fields
     assert restored.agent.name == original.agent.name
     assert restored.agent.owner_id == original.agent.owner_id
     assert restored.agent.agent_id == original.agent.agent_id
     assert restored.agent.version == original.agent.version
-    
+
     assert restored.model.provider_id == original.model.provider_id
     assert restored.model.model_id == original.model.model_id
     assert restored.model.endpoint == original.model.endpoint
@@ -249,20 +253,20 @@ def test_to_dict_roundtrip_all_sections():
     assert restored.model.num_predict == original.model.num_predict
     assert restored.model.keep_alive == original.model.keep_alive
     assert restored.model.strip_thinking == original.model.strip_thinking
-    
+
     assert restored.memory.backend == original.memory.backend
     assert restored.memory.conversation_db == original.memory.conversation_db
     assert restored.memory.semantic_db == original.memory.semantic_db
-    
+
     assert restored.permissions.allow == original.permissions.allow
     assert restored.permissions.deny == original.permissions.deny
-    
+
     assert restored.runtime.enabled == original.runtime.enabled
     assert restored.core.enabled == original.core.enabled
     assert restored.core.endpoint == original.core.endpoint
     assert restored.rescs.enabled == original.rescs.enabled
     assert restored.rescs.endpoint == original.rescs.endpoint
-    
+
     assert restored.web.enabled == original.web.enabled
     assert restored.web.search_provider == original.web.search_provider
     assert restored.web.timeout == original.web.timeout
@@ -270,14 +274,14 @@ def test_to_dict_roundtrip_all_sections():
     assert restored.web.max_chars == original.web.max_chars
     assert restored.web.max_query_length == original.web.max_query_length
     assert restored.web.max_url_length == original.web.max_url_length
-    
+
     assert restored.calculator.enabled == original.calculator.enabled
     assert restored.calculator.max_expression_chars == original.calculator.max_expression_chars
     assert restored.calculator.max_matrix_size == original.calculator.max_matrix_size
     assert restored.calculator.timeout == original.calculator.timeout
     assert restored.calculator.precision == original.calculator.precision
     assert restored.calculator.angle_mode == original.calculator.angle_mode
-    
+
     assert restored.translation.enabled == original.translation.enabled
     assert restored.translation.provider == original.translation.provider
     assert restored.translation.model == original.translation.model
@@ -288,7 +292,7 @@ def test_to_dict_roundtrip_all_sections():
     assert restored.translation.default_source == original.translation.default_source
     assert restored.translation.default_target == original.translation.default_target
     assert restored.translation.max_chars == original.translation.max_chars
-    
+
     assert restored.voice.enabled == original.voice.enabled
     assert restored.voice.sample_rate == original.voice.sample_rate
     assert restored.voice.channels == original.voice.channels

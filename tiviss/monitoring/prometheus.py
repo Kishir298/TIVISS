@@ -1,7 +1,13 @@
 """Prometheus metrics exporter for TIVISS."""
 
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from fastapi import Response
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 # Memory operations
 tiviss_memory_operations_total = Counter(

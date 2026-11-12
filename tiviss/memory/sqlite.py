@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .interface import MemoryRecord, MemorySearchResult, MemoryKeyError
+from .interface import MemoryKeyError, MemoryRecord, MemorySearchResult
 
 
 @dataclass
@@ -150,7 +150,7 @@ class SQLiteMemoryStore:
                     updated_at REAL NOT NULL
                 )
             """)
-            
+
             # Migration: add key column if missing (for older databases)
             cursor = conn.execute("PRAGMA table_info(semantic_memory)")
             columns = [row[1] for row in cursor.fetchall()]
@@ -158,7 +158,7 @@ class SQLiteMemoryStore:
                 conn.execute("ALTER TABLE semantic_memory ADD COLUMN key TEXT NOT NULL DEFAULT ''")
                 # Backfill key with record_id for existing records
                 conn.execute("UPDATE semantic_memory SET key = record_id WHERE key = ''")
-            
+
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_semantic_category
                 ON semantic_memory(category)
@@ -268,7 +268,7 @@ class SQLiteMemoryStore:
         """Store a memory record in semantic memory."""
         now = _now_dt()
         record_id = record.record_id if record.record_id else str(uuid.uuid4())
-        
+
         # Extract structured columns from metadata
         meta_cols = _extract_metadata_cols(record.metadata)
         metadata_json = _build_metadata_json(record.metadata)
@@ -315,7 +315,7 @@ class SQLiteMemoryStore:
             ).fetchone()
         if not row:
             raise MemoryKeyError(record_id)
-        
+
         metadata = _merge_metadata(row["metadata"], {
             "category": row["category"],
             "memory_type": row["memory_type"],
@@ -324,7 +324,7 @@ class SQLiteMemoryStore:
             "source": row["source"],
             "evidence": row["evidence"],
         })
-        
+
         return MemoryRecord(
             key=row["key"],
             content=row["content"],
@@ -353,16 +353,16 @@ class SQLiteMemoryStore:
 
             old_content = row["content"]
             old_metadata = json.loads(row["metadata"]) if row["metadata"] else {}
-            
+
             # Merge old metadata with new metadata
             new_metadata = dict(old_metadata)
             if metadata:
                 new_metadata.update(metadata)
-            
+
             # Extract structured columns from merged metadata
             meta_cols = _extract_metadata_cols(new_metadata)
             metadata_json = _build_metadata_json(new_metadata)
-            
+
             new_content = content if content is not None else old_content
             now = _now_dt()
 

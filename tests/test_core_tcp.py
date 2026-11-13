@@ -7,11 +7,60 @@ from contextlib import suppress
 import pytest
 
 from tiviss.integrations.core_tcp import (
+    PROTOCOL_VERSION,
     CoreTcpClient,
     DeviceClientError,
     decode_frame,
     encode_frame,
 )
+
+# Mirrors CORE-HOST core/communication/protocol.py:validate_registration_payload
+# (lines 106-147) and core/version.py:SUPPORTED_VERSIONS. Kept local so the
+# TIVISS tests do not import from another repository at runtime.
+_SUPPORTED_PROTOCOL_VERSIONS = {"0.2.0", "0.2.1", "0.3.0", "0.4.0", "0.5.0"}
+
+
+def _host_validate_registration_payload(payload):
+    failed = "DEVICE_REGISTRATION_FAILED"
+    if not isinstance(payload, dict):
+        return failed, "Invalid registration payload structure."
+    device_id = payload.get("device_id")
+    if device_id is None:
+        return failed, "Missing device_id."
+    if isinstance(device_id, str) and device_id == "":
+        return failed, "Empty device_id."
+    if not isinstance(device_id, str):
+        return failed, "Invalid device_id."
+    device_name = payload.get("device_name")
+    if device_name is None:
+        return failed, "Missing device_name."
+    if not isinstance(device_name, str) or device_name == "":
+        return failed, "Empty device_name."
+    if payload.get("device_type") is None:
+        return failed, "Missing device_type."
+    device_type = payload["device_type"]
+    if not isinstance(device_type, str) or not device_type.strip():
+        return failed, "Empty device_type."
+    if payload.get("platform") is None:
+        return failed, "Missing platform."
+    platform = payload["platform"]
+    if not isinstance(platform, str) or not platform.strip():
+        return failed, "Empty platform."
+    if "capabilities" not in payload:
+        return failed, "Missing capabilities."
+    if not isinstance(payload.get("capabilities"), list):
+        return failed, "Malformed capabilities: must be a list."
+    if payload.get("protocol_version") is None:
+        return failed, "Missing protocol_version."
+    if payload.get("protocol_version") not in _SUPPORTED_PROTOCOL_VERSIONS:
+        return failed, "Unsupported protocol version."
+    if "join_name" in payload and payload.get("join_name") is not None:
+        join_name = payload.get("join_name")
+        if not isinstance(join_name, str) or not join_name.strip():
+            return failed, "Invalid join_name."
+        if len(join_name.strip()) > 64:
+            return failed, "Invalid join_name."
+    return None, None
 
 
 def _read_frame(sock):
@@ -138,6 +187,59 @@ def test_handshake_and_register_over_socketpair():
     assert client.registered is True
     client.close()
     assert client.connected is False
+
+
+def test_register_payload_passes_host_validation_with_device_identity():
+    client_end, peer_end = socket.socketpair()
+    client = CoreTcpClient(host="h", port=1, device_id="d", credential="c")
+    client._sock = client_end
+    client._session_token = "s-1"
+    captured = {}
+
+    def script(incoming):
+        assert incoming["message_type"] == "DEVICE_REGISTER"
+        captured["payload"] = incoming["payload"]
+        return {
+            "message_id": "m2",
+            "source": "core",
+            "destination": "d",
+            "message_type": "DEVICE_REGISTER_RESPONSE",
+            "timestamp": "t",
+            "request_id": incoming.get("request_id"),
+            "payload": {"registered": True},
+            "identity_id": "d",
+        }
+
+    _peer_script(peer_end, script)
+    client.register(capabilities=["chat"])
+    payload = captured["payload"]
+    assert payload["device_type"] == "tiviss"
+    assert isinstance(payload["platform"], str) and payload["platform"].strip()
+    assert payload["platform"] == client.platform
+    assert _host_validate_registration_payload(payload) == (None, None)
+    assert payload["protocol_version"] == PROTOCOL_VERSION
+    client.close()
+
+
+def test_register_device_identity_sanitizes_platform_and_rejects_blanks():
+    client = CoreTcpClient(
+        host="h",
+        port=1,
+        device_id="d",
+        credential="c",
+        device_type="tiviss-edge",
+        platform="Darwin ARM64",
+    )
+    assert client.device_type == "tiviss-edge"
+    assert client.platform == "darwin-arm64"
+    with pytest.raises(DeviceClientError):
+        CoreTcpClient(
+            host="h", port=1, device_id="d", credential="c", device_type=" "
+        )
+    with pytest.raises(DeviceClientError):
+        CoreTcpClient(
+            host="h", port=1, device_id="d", credential="c", platform="!!!"
+        )
 
 
 def test_request_id_mismatch_drops_connection():

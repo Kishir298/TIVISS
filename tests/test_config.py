@@ -83,6 +83,40 @@ def test_load_env_without_overrides_uses_defaults(monkeypatch):
     assert config.agent.name == "tiviss"
 
 
+def test_core_device_identity_defaults():
+    config = TIVISSConfig.defaults()
+    assert config.core.device_type == "tiviss"
+    assert config.core.platform
+    assert config.core.platform == config.core.platform.strip().lower()
+    assert not any(char.isspace() for char in config.core.platform)
+
+
+def test_load_core_device_identity_from_mapping():
+    config = TIVISSConfig.load(
+        {"core": {"device_type": " tiviss-edge ", "platform": "Linux x86_64"}}
+    )
+    assert config.core.device_type == "tiviss-edge"
+    assert config.core.platform == "linux-x86_64"
+
+
+def test_load_env_core_device_identity_overrides():
+    config = TIVISSConfig.load_env(
+        {
+            "TIVISS_CORE_DEVICE_TYPE": "tiviss-edge",
+            "TIVISS_CORE_PLATFORM": "Mac OS X",
+        }
+    )
+    assert config.core.device_type == "tiviss-edge"
+    assert config.core.platform == "mac-os-x"
+
+
+def test_core_device_identity_rejects_blank_values():
+    with pytest.raises(ConfigValidationError):
+        TIVISSConfig.load({"core": {"device_type": " "}})
+    with pytest.raises(ConfigValidationError):
+        TIVISSConfig.load({"core": {"platform": "!!!"}})
+
+
 def test_build_identity():
     config = TIVISSConfig.load(
         {"agent": {"name": "tiv", "owner_id": "kishir", "agent_id": "tiv-1"}}
@@ -165,7 +199,12 @@ def test_to_dict_roundtrip_all_sections(tmp_path):
             "deny": ["tools.dangerous"]
         },
         "runtime": {"enabled": True},
-        "core": {"enabled": True, "endpoint": "tcp://localhost:5000"},
+        "core": {
+            "enabled": True,
+            "endpoint": "tcp://localhost:5000",
+            "device_type": "tiviss-edge",
+            "platform": "linux-x86_64",
+        },
         "rescs": {"enabled": False, "endpoint": None},
         "web": {
             "enabled": True,
@@ -264,6 +303,8 @@ def test_to_dict_roundtrip_all_sections(tmp_path):
     assert restored.runtime.enabled == original.runtime.enabled
     assert restored.core.enabled == original.core.enabled
     assert restored.core.endpoint == original.core.endpoint
+    assert restored.core.device_type == original.core.device_type
+    assert restored.core.platform == original.core.platform
     assert restored.rescs.enabled == original.rescs.enabled
     assert restored.rescs.endpoint == original.rescs.endpoint
 

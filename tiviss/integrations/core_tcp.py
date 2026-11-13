@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import math
+import platform as _platform
+import re
 import socket
 import ssl
 import struct
@@ -27,10 +29,21 @@ from typing import Any
 PROTOCOL_VERSION = "0.3.0"
 HEADER_SIZE = 4
 MAX_FRAME_SIZE = 10 * 1024 * 1024
+_PLATFORM_TOKEN_RE = re.compile(r"[^a-z0-9._-]+")
 
 
 class DeviceClientError(RuntimeError):
     """Transport or protocol failure talking to C.O.R.E."""
+
+
+def _sanitize_platform(value: str) -> str:
+    """Normalize a platform label into a safe lowercase wire token."""
+    return _PLATFORM_TOKEN_RE.sub("-", value.strip().lower()).strip("-._")
+
+
+def _default_platform() -> str:
+    """Return the sanitized host platform (``unknown`` when undetectable)."""
+    return _sanitize_platform(_platform.system() or "") or "unknown"
 
 
 def _validate_timeout_s(value: Any, *, field: str = "timeout_s") -> float:
@@ -110,6 +123,8 @@ class CoreTcpClient:
         device_id: str,
         credential: str,
         device_name: str = "",
+        device_type: str = "tiviss",
+        platform: str | None = None,
         use_tls: bool = True,
         ca_file: str | None = None,
         timeout_s: float = 10.0,
@@ -118,12 +133,25 @@ class CoreTcpClient:
             raise DeviceClientError("device_id must be a non-empty string")
         if not (isinstance(credential, str) and credential):
             raise DeviceClientError("credential must be a non-empty string")
+        validated_device_type = _validate_endpoint_str(
+            device_type, field="device_type"
+        )
+        if platform is None:
+            validated_platform = _default_platform()
+        else:
+            validated_platform = _sanitize_platform(
+                _validate_endpoint_str(platform, field="platform")
+            )
+            if not validated_platform:
+                raise DeviceClientError("platform must be a non-empty string")
         validated_timeout = _validate_timeout_s(timeout_s, field="timeout_s")
         self.host = host
         self.port = int(port)
         self.device_id = device_id.strip()
         self.identity_id = self.device_id
         self.device_name = device_name or self.device_id
+        self.device_type = validated_device_type
+        self.platform = validated_platform
         self._credential = credential
         self.use_tls = bool(use_tls)
         self.ca_file = ca_file
@@ -285,6 +313,8 @@ class CoreTcpClient:
             payload={
                 "device_id": self.device_id,
                 "device_name": self.device_name,
+                "device_type": self.device_type,
+                "platform": self.platform,
                 "join_name": self.device_name,
                 "protocol_version": PROTOCOL_VERSION,
                 "capabilities": list(capabilities or []),

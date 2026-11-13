@@ -9,11 +9,25 @@ environment variables. No secrets are hard-coded here.
 from __future__ import annotations
 
 import os
+import platform as _platform
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from .. import __version__ as _package_version
+
+_PLATFORM_TOKEN_RE = re.compile(r"[^a-z0-9._-]+")
+
+
+def sanitize_platform(value: str) -> str:
+    """Normalize a platform label into a safe lowercase wire token."""
+    return _PLATFORM_TOKEN_RE.sub("-", value.strip().lower()).strip("-._")
+
+
+def default_platform() -> str:
+    """Return the sanitized host platform (``unknown`` when undetectable)."""
+    return sanitize_platform(_platform.system() or "") or "unknown"
 
 
 class ConfigValidationError(ValueError):
@@ -131,6 +145,8 @@ class RuntimeSettings:
 class CoreSettings:
     enabled: bool = False
     endpoint: str | None = None
+    device_type: str = "tiviss"
+    platform: str = field(default_factory=default_platform)
 
 
 @dataclass
@@ -170,6 +186,14 @@ class TIVISSConfig:
             errors.append("agent.owner_id must be a non-empty string")
         if self.agent.agent_id is not None and not self.agent.agent_id.strip():
             errors.append("agent.agent_id must be a non-empty string when provided")
+
+        if not (
+            isinstance(self.core.device_type, str)
+            and self.core.device_type.strip()
+        ):
+            errors.append("core.device_type must be a non-empty string")
+        if not (isinstance(self.core.platform, str) and self.core.platform.strip()):
+            errors.append("core.platform must be a non-empty string")
 
         if self.model.provider_id not in {"mock", "ollama"}:
             errors.append(
@@ -388,9 +412,21 @@ class TIVISSConfig:
         config.runtime = RuntimeSettings(
             enabled=cls._to_bool(runtime.get("enabled"), config.runtime.enabled)
         )
+        core_device_type = core.get("device_type")
+        core_platform = core.get("platform")
         config.core = CoreSettings(
             enabled=cls._to_bool(core.get("enabled"), False),
             endpoint=core.get("endpoint"),
+            device_type=(
+                str(core_device_type).strip()
+                if core_device_type is not None
+                else config.core.device_type
+            ),
+            platform=(
+                sanitize_platform(str(core_platform))
+                if core_platform is not None
+                else config.core.platform
+            ),
         )
         config.rescs = RescsSettings(
             enabled=cls._to_bool(rescs.get("enabled"), False),
@@ -504,6 +540,12 @@ class TIVISSConfig:
             }
         if raw_core := _get("TIVISS_CORE_ENABLED"):
             config.core.enabled = raw_core.strip().lower() in {"1", "true", "yes", "on"}
+        if core_device_type := _get(
+            "TIVISS_CORE_DEVICE_TYPE", "TIVISS_DEVICE_TYPE"
+        ):
+            config.core.device_type = core_device_type.strip()
+        if core_platform := _get("TIVISS_CORE_PLATFORM", "TIVISS_PLATFORM"):
+            config.core.platform = sanitize_platform(core_platform)
         if raw_rescs := _get("TIVISS_RESCS_ENABLED"):
             config.rescs.enabled = raw_rescs.strip().lower() in {
                 "1",

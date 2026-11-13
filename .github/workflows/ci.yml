@@ -22,7 +22,7 @@ jobs:
       - name: Run lint
         run: |
           pip install ruff
-          ruff check --select F tiviss tests
+          ruff check --select E9,F,I tiviss tests
       - name: Run tests
         run: |
           python -m pytest -q --tb=no

@@ -109,10 +109,10 @@ def test_import_rejects_non_mapping():
 def test_export_scrubs_model_config_secrets():
     """Test that model configuration section is scrubbed for secrets."""
     from tiviss.identity import AgentIdentity, Ownership
-    
+
     identity = AgentIdentity.create(name="t", version="1", owner_id="k")
     ownership = Ownership.create("k")
-    
+
     # Model config with api_key
     model_config = {
         "provider_id": "ollama",
@@ -125,7 +125,7 @@ def test_export_scrubs_model_config_secrets():
             {"token": "list-secret-2", "info": "fine"}
         ]
     }
-    
+
     doc = export_state(
         identity=identity,
         ownership=ownership,
@@ -133,24 +133,24 @@ def test_export_scrubs_model_config_secrets():
         permissions={},
         memory_records=[],
     )
-    
+
     # Check model section is scrubbed
     model_payload = doc["payload"]["model"]
     assert "api_key" not in model_payload
     assert model_payload["provider_id"] == "ollama"
     assert model_payload["model_id"] == "llama3"
     assert model_payload["endpoint"] == "http://localhost:11434"
-    
+
     # Check nested mapping scrubbed
     assert "api_key" not in model_payload["nested"]
     assert model_payload["nested"]["safe"] == "value"
-    
+
     # Check list of mappings scrubbed
     assert "api_key" not in model_payload["list_of_mappings"][0]
     assert model_payload["list_of_mappings"][0]["data"] == "ok"
     assert "token" not in model_payload["list_of_mappings"][1]
     assert model_payload["list_of_mappings"][1]["info"] == "fine"
-    
+
     # Check dropped secrets recorded
     dropped = doc["dropped_secrets"]
     assert "model.api_key" in dropped
@@ -164,11 +164,11 @@ def test_export_scrubs_mappings_within_lists():
     from tiviss.identity import AgentIdentity, Ownership
     from tiviss.memory.interface import MemoryRecord
     from tiviss.memory.local import LocalMemory
-    
+
     identity = AgentIdentity.create(name="t", version="1", owner_id="k")
     ownership = Ownership.create("k")
     memory = LocalMemory()
-    
+
     # Memory record with list of mappings containing secrets
     memory.store(MemoryRecord(
         key="test",
@@ -181,7 +181,7 @@ def test_export_scrubs_mappings_within_lists():
             "safe_field": "value"
         }
     ))
-    
+
     records = memory.search("").records
     doc = export_state(
         identity=identity,
@@ -190,7 +190,7 @@ def test_export_scrubs_mappings_within_lists():
         permissions={},
         memory_records=records,
     )
-    
+
     # Check memory record metadata is scrubbed
     mem_metadata = doc["payload"]["memory_records"][0]["metadata"]
     assert "tags" in mem_metadata
@@ -200,7 +200,7 @@ def test_export_scrubs_mappings_within_lists():
     assert "password" not in mem_metadata["tags"][1]
     assert mem_metadata["tags"][1]["name"] == "tag2"
     assert mem_metadata["safe_field"] == "value"
-    
+
     # Check dropped secrets
     dropped = doc["dropped_secrets"]
     assert "memory.test.tags[0].api_key" in dropped
@@ -209,15 +209,16 @@ def test_export_scrubs_mappings_within_lists():
 
 def test_no_api_key_sentinel_in_serialized_output():
     """Assert no sentinel api_key appears in serialized JSON output."""
-    from tiviss.identity import AgentIdentity, Ownership
     import json
-    
+
+    from tiviss.identity import AgentIdentity, Ownership
+
     identity = AgentIdentity.create(
-        name="t", version="1", owner_id="k", 
+        name="t", version="1", owner_id="k",
         meta={"api_key": "should-not-appear", "normal": "data"}
     )
     ownership = Ownership.create("k")
-    
+
     doc = export_state(
         identity=identity,
         ownership=ownership,
@@ -225,10 +226,10 @@ def test_no_api_key_sentinel_in_serialized_output():
         permissions={},
         memory_records=[],
     )
-    
+
     # Serialize to JSON
     json_str = json.dumps(doc)
-    
+
     # The literal string "api_key" should not appear as a key in the JSON
     # (it should be dropped and only appear in dropped_secrets list)
     assert '"api_key":' not in json_str

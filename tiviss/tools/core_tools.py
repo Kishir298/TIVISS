@@ -107,7 +107,7 @@ class CoreDiscoverDevicesTool(CoreToolBase):
 class CoreDeviceInfoTool(CoreToolBase):
     """Fetch one CORE-authoritative device record."""
 
-    
+
 
     def __init__(self, core=None):
         super().__init__(core)
@@ -150,7 +150,7 @@ class CoreDeviceInfoTool(CoreToolBase):
 class CoreStatusTool(CoreToolBase):
     """Local CORE connection/device snapshot (no new network request)."""
 
-    
+
 
     def __init__(self, core=None):
         super().__init__(core)
@@ -205,7 +205,7 @@ class CoreStatusTool(CoreToolBase):
 class CoreServiceRequestTool(CoreToolBase):
     """Invoke a host service operation (service:<id>/operation)."""
 
-    
+
 
     def __init__(self, core=None):
         super().__init__(core)
@@ -277,7 +277,7 @@ class CoreServiceRequestTool(CoreToolBase):
 class CoreAgentRequestTool(CoreToolBase):
     """Agent operations via the host agent service (assign/list/status...)."""
 
-    
+
 
     def __init__(self, core=None):
         super().__init__(core)
@@ -341,7 +341,7 @@ class CoreAgentRequestTool(CoreToolBase):
 class CoreDataRequestTool(CoreToolBase):
     """Query host data (records/files) via DATA_REQUEST."""
 
-    
+
 
     def __init__(self, core=None):
         super().__init__(core)
@@ -411,7 +411,7 @@ class CoreDataRequestTool(CoreToolBase):
 class CoreSendToDeviceTool(CoreToolBase):
     """Send a device-to-device application message via the host router."""
 
-    
+
 
     def __init__(self, core=None):
         super().__init__(core)

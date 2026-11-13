@@ -13,7 +13,6 @@ from ..configuration import settings as tiviss_settings
 from ..permissions.permissions import Permission
 from .interface import Tool, ToolError, ToolResult, ToolStatus
 
-
 # Optional string arguments accepted per operation (all scalar-schema).
 _STRING_ARGS = (
     "expression",

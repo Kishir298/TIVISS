@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any
+
 from ..configuration import settings as tiviss_settings
 from ..errors import TivissError
 
@@ -37,7 +38,7 @@ class WebProvider(ABC):
     """Abstract web provider interface."""
 
     @abstractmethod
-    def search(self, query: str, count: int) -> List[SearchResult]:
+    def search(self, query: str, count: int) -> list[SearchResult]:
         pass
 
     @abstractmethod
@@ -48,7 +49,7 @@ class WebProvider(ABC):
 class MockWebProvider(WebProvider):
     """Mock provider for testing and offline use."""
 
-    def search(self, query: str, count: int) -> List[SearchResult]:
+    def search(self, query: str, count: int) -> list[SearchResult]:
         return [SearchResult(
             title="Mock result for: " + query,
             url="https://example.com",

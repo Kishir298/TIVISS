@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Optional, List
 
 from ..memory.sqlite import ConversationLogEntry
-
 
 DEFAULT_NAMESPACE_PREFIX = "tiviss"
 CHAT_LOGS_NAMESPACE = "chat_logs"
@@ -25,9 +23,9 @@ class ConversationLogStore:
         self.session_id = session_id
         self.namespace = _build_chat_logs_namespace(session_id)
         self.memory_store = memory_store
-        self._local_entries: List[ConversationLogEntry] = []
+        self._local_entries: list[ConversationLogEntry] = []
 
-    def append(self, request_content: str, response_content: str, metadata: Optional[dict] = None) -> str:
+    def append(self, request_content: str, response_content: str, metadata: dict | None = None) -> str:
         """Append a conversation exchange to the log."""
         request_id = str(uuid.uuid4())
         if self.memory_store:
@@ -43,13 +41,13 @@ class ConversationLogStore:
             ))
         return request_id
 
-    def get_history(self, limit: int = 100) -> List[ConversationLogEntry]:
+    def get_history(self, limit: int = 100) -> list[ConversationLogEntry]:
         """Get conversation history for this session."""
         if self.memory_store:
             return self.memory_store.get_conversation_history(limit=limit, session_id=self.session_id)
         return self._local_entries[-limit:]
 
-    def search(self, query: str, limit: int = 10) -> List[ConversationLogEntry]:
+    def search(self, query: str, limit: int = 10) -> list[ConversationLogEntry]:
         """Search conversation history."""
         if self.memory_store:
             return self.memory_store.search_conversation(query, limit)

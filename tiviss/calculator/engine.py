@@ -6,8 +6,8 @@ Delegates to the local engine -- never to the network, never to the LLM.
 
 from __future__ import annotations
 
-import math
 import importlib.util
+import math
 import re
 from dataclasses import dataclass
 from typing import Any

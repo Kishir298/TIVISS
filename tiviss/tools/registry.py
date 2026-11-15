@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ..permissions.confirmation import broker_approver, is_dangerous
 from ..permissions.permissions import (
     PermissionContext,
     PermissionDeniedError,
@@ -24,8 +25,9 @@ class UnknownToolError(ToolError):
 class ToolRegistry:
     """Registry that gates every execution through the permission policy.
 
-    Execution flow: tool exists -> permission checks -> input validation ->
-    execution -> structured result. Permission failures produce a DENIED
+    Execution flow: tool exists -> permission checks -> loopback broker
+    approval for dangerous permissions -> input validation -> execution ->
+    structured result. Permission or approval failures produce a DENIED
     result instead of raising.
     """
 
@@ -69,7 +71,9 @@ class ToolRegistry:
         if tool is None:
             raise UnknownToolError(tool_id)
 
-        for permission in tool.required_permissions():
+        permissions = list(tool.required_permissions())
+
+        for permission in permissions:
             if not self.policy.check(ctx, permission):
                 return ToolResult(
                     tool_id=tool_id,
@@ -77,6 +81,28 @@ class ToolRegistry:
                     error=f"permission denied: {permission}",
                     metadata={"permission": permission.name, "source": ctx.source},
                 )
+
+        dangerous = [
+            permission for permission in permissions if is_dangerous(permission)
+        ]
+        approver = broker_approver() if dangerous else None
+        if approver is not None:
+            tool_params = dict(params or {})
+            for permission in dangerous:
+                if not approver(permission, tool_id, tool_params):
+                    return ToolResult(
+                        tool_id=tool_id,
+                        status=ToolStatus.DENIED,
+                        error=(
+                            f"permission denied: {permission} "
+                            "(broker approval denied)"
+                        ),
+                        metadata={
+                            "permission": permission.name,
+                            "source": ctx.source,
+                            "approval": "broker",
+                        },
+                    )
 
         try:
             cleaned = tool.validate_input(dict(params or {}))

@@ -63,3 +63,10 @@ tls/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+# Signing keys, release credentials and local secret stores
+.secrets/
+secrets/
+*.ed25519
+*.priv
+private-key*
+release-keys/

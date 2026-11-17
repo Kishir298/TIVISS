@@ -63,6 +63,19 @@ tls/
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+# ASCS workspace state written by the integration layer
+.ascs/
+
+# SSH private keys if dropped into the repo
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+
 # Signing keys, release credentials and local secret stores
 .secrets/
 secrets/

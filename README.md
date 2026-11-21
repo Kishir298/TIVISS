@@ -22,6 +22,20 @@ of R.I.S.A.R.M.S. T.I.V.I.S.S. is **not** A.S.I.S.:
 - T.I.V.I.S.S. owns its own identity, memory, permissions, and ownership.
 - T.I.V.I.S.S. does not import A.S.I.S. internals and is not dependent on A.S.I.S.
 
+## Repository layout
+
+| Piece | Repository |
+| --- | --- |
+| Host runtime: identity, memory, permissions, ownership, handover, CLI | `Kishir298/TIVISS-HOST` (this repository) |
+| Client library for RISARMS-ui and CORE-CLIENT (scaffold) | `Kishir298/TIVISS-CLIENT` |
+
+This repository is the **host side**. The client library in
+`Kishir298/TIVISS-CLIENT` will talk to this runtime over its transports and
+never imports `tiviss` internals directly. The security-protocol package is
+planned to be published from this repository, with its device-side client in
+`Kishir298/TIVISS-CLIENT`; neither is implemented yet. Ownership and scope are
+recorded in RISARMS-DOCS.
+
 ## Relationship with C.O.R.E.
 
 C.O.R.E. ("Communication, Organization and Resource Engine") is the central

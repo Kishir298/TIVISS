@@ -12,8 +12,10 @@ import io
 import json
 import logging
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, TextIO
+
+from tiviss._compat import UTC
 
 _SECRET_HINTS = ("token", "secret", "password", "api_key", "apikey", "credential")
 REDACTED = "***redacted***"

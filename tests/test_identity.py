@@ -1,7 +1,8 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 import pytest
 
+from tiviss._compat import UTC
 from tiviss.identity import AgentIdentity, IdentityState, IdentityValidationError
 
 

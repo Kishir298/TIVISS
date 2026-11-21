@@ -15,8 +15,10 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
+
+from tiviss._compat import UTC
 
 from .identity.identity import AgentIdentity, IdentityState
 from .identity.ownership import Ownership, OwnershipState, OwnershipTransfer

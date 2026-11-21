@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
+
+from tiviss._compat import UTC
 
 from ..conversation.messages import Request, Response, ResponseStatus
 from ..events.events import Event, EventBus, EventType

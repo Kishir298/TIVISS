@@ -10,8 +10,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import Any
+
+from tiviss._compat import StrEnum
 
 from ..permissions.permissions import Permission
 

@@ -5,8 +5,9 @@ Structured error codes and exceptions for consistent error handling.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Any
+
+from tiviss._compat import StrEnum
 
 
 class ErrorCode(StrEnum):

@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
+
+from tiviss._compat import StrEnum
 
 from .identity import utcnow
 

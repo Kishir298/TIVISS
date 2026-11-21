@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
+from tiviss._compat import StrEnum
 
 
 class AgentState(StrEnum):

@@ -23,8 +23,10 @@ import uuid
 import warnings
 from collections.abc import Mapping
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
+
+from tiviss._compat import UTC
 
 PROTOCOL_VERSION = "0.3.0"
 HEADER_SIZE = 4

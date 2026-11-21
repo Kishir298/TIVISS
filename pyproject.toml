@@ -7,7 +7,7 @@ name = "tiviss"
 version = "0.2.0"
 description = "Though I'm Vanquished, I'm Still Stronger - an independent AI agent of the R.I.S.A.R.M.S. ecosystem"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Kishir298" }]
 keywords = ["agent", "ai", "risarms", "handover", "identity"]
@@ -36,7 +36,7 @@ addopts = "-ra"
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = [

@@ -9,9 +9,10 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime
 from typing import Any
+
+from tiviss._compat import UTC, StrEnum
 
 
 class RequestValidationError(ValueError):

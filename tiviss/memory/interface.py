@@ -12,8 +12,10 @@ import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
+
+from tiviss._compat import UTC
 
 
 def utcnow() -> datetime:

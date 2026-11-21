@@ -26,7 +26,10 @@ jobs:
       - name: Run lint
         run: |
           pip install ruff
-          ruff check --select E9,F,I tiviss tests
+          ruff check --select E9,F,I tiviss tests security
       - name: Run tests
         run: |
           python -m pytest -q --tb=no
+      - name: Run security protocol tests
+        run: |
+          cd security/protocol && python -m pytest -q --tb=no

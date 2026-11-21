@@ -27,14 +27,17 @@ of R.I.S.A.R.M.S. T.I.V.I.S.S. is **not** A.S.I.S.:
 | Piece | Repository |
 | --- | --- |
 | Host runtime: identity, memory, permissions, ownership, handover, CLI | `Kishir298/TIVISS-HOST` (this repository) |
+| Security protocol (`tiviss-security-protocol`): framing, capability tokens, PDP schema | `Kishir298/TIVISS-HOST` → `security/protocol/` (implemented, v0.1.0) |
 | Client library for RISARMS-ui and CORE-CLIENT (scaffold) | `Kishir298/TIVISS-CLIENT` |
 
 This repository is the **host side**. The client library in
 `Kishir298/TIVISS-CLIENT` will talk to this runtime over its transports and
 never imports `tiviss` internals directly. The security-protocol package is
-planned to be published from this repository, with its device-side client in
-`Kishir298/TIVISS-CLIENT`; neither is implemented yet. Ownership and scope are
-recorded in RISARMS-DOCS.
+published from this repository (`security/protocol/`, stdlib-only, Python ≥
+3.10), with its device-side client in `Kishir298/TIVISS-CLIENT` (which pins
+the protocol version). The local PDP daemon (`tiviss-security-host`) and UDS
+transport (`tiviss-security-ipc`) are later waves — see RISARMS-DOCS. Ownership
+and scope are recorded in RISARMS-DOCS.
 
 ## Relationship with C.O.R.E.
 
@@ -154,6 +157,14 @@ Tests are offline and deterministic; no external services are required.
 python -m venv .venv
 .venv\Scripts\python -m pip install -r requirements-dev.txt
 .venv\Scripts\python -m pytest
+```
+
+The security-protocol package keeps its own suite (also offline/deterministic,
+Python ≥ 3.10):
+
+```text
+cd security/protocol
+python -m pytest -q
 ```
 
 ## Usage
